@@ -414,9 +414,9 @@ def generate(
             else:
                 words = tokenizer.text_to_tokens(sentence)
                 resp_sentences_seg.append(words)
-        output_logits = output_logits.cpu().numpy().tolist()
+        output_logits = output_logits
         if all_probs:
-            full_logits = full_logits.cpu().numpy().tolist()
+            full_logits = full_logits
 
         # offsets calculation
         all_offsets = []
@@ -504,8 +504,8 @@ def sample_sequence_batch(
         # Generate enough tokens for the longest sequence
         maxlen = tokens_to_generate + context_lengths.max().item()
 
-        if maxlen > model.cfg.encoder_seq_length:
-            maxlen = model.cfg.encoder_seq_length
+        if maxlen > model.cfg.encoder_seq_length + 1:
+            maxlen = model.cfg.encoder_seq_length + 1
 
         lengths = torch.ones([batch_size]).long().cuda() * maxlen
 
