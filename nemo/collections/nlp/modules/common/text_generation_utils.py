@@ -58,8 +58,8 @@ def get_computeprob_response(tokenizer, response, inputs):
         new_token_ids.append(new_token_id)
         new_tokens.append(response['tokens'][batch_id][:token_len])
         new_texts.append(new_text)
-        log_probs.append(response['logprob'][batch_id][: (token_len - 1)])
-        full_logprobs.append(response['full_logprob'][batch_id][: (token_len - 1)])
+        log_probs.append(response['logprob'][batch_id][:token_len])
+        full_logprobs.append(response['full_logprob'][batch_id][:token_len])
         offsets.append(response['offsets'][batch_id][:-1])
     compute_prob_response['sentences'] = new_texts
     compute_prob_response['tokens'] = new_tokens
