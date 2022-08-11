@@ -239,6 +239,8 @@ class ConformerConvolution(nn.Module):
             self.batch_norm = nn.GroupNorm(num_groups=num_groups, num_channels=d_model)
         elif norm_type == "instance_norm":
             self.batch_norm = nn.InstanceNorm1d(dw_conv_input_dim, affine=True, track_running_stats=True)
+        elif norm_type == "instance_norm_no_stats":
+            self.batch_norm = nn.InstanceNorm1d(dw_conv_input_dim, affine=True, track_running_stats=False)
         else:
             raise ValueError(f"conv_norm_type={norm_type} is not valid!")
 
