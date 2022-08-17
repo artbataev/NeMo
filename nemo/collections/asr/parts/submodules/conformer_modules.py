@@ -30,6 +30,21 @@ from nemo.core.classes.mixins.adapter_mixins import AdapterModuleMixin
 __all__ = ['ConformerConvolution', 'ConformerFeedForward', 'ConformerLayer']
 
 
+class FakeBatchNorm(nn.Module):
+    def __init__(self, num_features: int):
+        super().__init__()
+        self.num_features = num_features
+        self.eps = 1e-5
+        self.weight = nn.Parameter(torch.ones(num_features))
+        self.bias = nn.Parameter(torch.zeros(num_features))
+        self.running_mean = nn.Parameter(torch.zeros(num_features))
+        self.running_var = nn.Parameter(torch.ones(num_features))
+        self.register_buffer('num_batches_tracked', torch.tensor(10000, dtype=torch.long))
+
+    def forward(self, x: torch.Tensor):
+        return (x - self.running_mean) / torch.sqrt(self.running_var + self.eps) * self.weight + self.bias
+
+
 class ConformerLayer(torch.nn.Module, AdapterModuleMixin, AccessMixin):
     """A single block of the Conformer encoder.
 
@@ -232,6 +247,8 @@ class ConformerConvolution(nn.Module):
 
         if norm_type == 'batch_norm':
             self.batch_norm = nn.BatchNorm1d(dw_conv_input_dim)
+        elif norm_type == 'fake_batch_norm':
+            self.batch_norm = FakeBatchNorm(dw_conv_input_dim)
         elif norm_type == 'layer_norm':
             self.batch_norm = nn.LayerNorm(dw_conv_input_dim)
         elif norm_type.startswith('group_norm'):
