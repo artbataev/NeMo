@@ -42,7 +42,9 @@ class FakeBatchNorm(nn.Module):
         self.register_buffer('num_batches_tracked', torch.tensor(10000, dtype=torch.long))
 
     def forward(self, x: torch.Tensor):
-        return (x - self.running_mean) / torch.sqrt(self.running_var + self.eps) * self.weight + self.bias
+        return (x - self.running_mean.unsqueeze(-1)) / torch.sqrt(
+            self.running_var.unsqueeze(-1) + self.eps
+        ) * self.weight.unsqueeze(-1) + self.bias.unsqueeze(-1)
 
 
 class ConformerLayer(torch.nn.Module, AdapterModuleMixin, AccessMixin):
@@ -293,8 +295,8 @@ class ConformerConvolution(nn.Module):
         return x
 
     def reset_parameters_conv(self):
-        pw1_max = pw2_max = self.d_model ** -0.5
-        dw_max = self.kernel_size ** -0.5
+        pw1_max = pw2_max = self.d_model**-0.5
+        dw_max = self.kernel_size**-0.5
 
         with torch.no_grad():
             nn.init.uniform_(self.pointwise_conv1.weight, -pw1_max, pw1_max)
@@ -327,8 +329,8 @@ class ConformerFeedForward(nn.Module):
         return x
 
     def reset_parameters_ff(self):
-        ffn1_max = self.d_model ** -0.5
-        ffn2_max = self.d_ff ** -0.5
+        ffn1_max = self.d_model**-0.5
+        ffn2_max = self.d_ff**-0.5
         with torch.no_grad():
             nn.init.uniform_(self.linear1.weight, -ffn1_max, ffn1_max)
             nn.init.uniform_(self.linear1.bias, -ffn1_max, ffn1_max)
