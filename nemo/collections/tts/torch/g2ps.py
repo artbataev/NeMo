@@ -19,8 +19,8 @@ import re
 import time
 from typing import Optional
 
-import phonemizer
-from phonemizer import phonemize
+# import phonemizer
+# from phonemizer import phonemize
 
 import nltk
 import torch
@@ -30,7 +30,7 @@ from nemo.utils import logging
 from nemo.utils.get_rank import is_global_rank_zero
 
 
-global_phonemizer = phonemizer.backend.EspeakBackend(language='en-us', preserve_punctuation=True,  with_stress=True)
+# global_phonemizer = phonemizer.backend.EspeakBackend(language='en-us', preserve_punctuation=True,  with_stress=True)
 
 _alt_re = re.compile(r'\([0-9]+\)')
 _whitespace_re = re.compile(r'\s+')
