@@ -85,6 +85,10 @@ RUN --mount=from=nemo-src,target=/tmp/nemo cd /tmp/nemo && pip install ".[all]" 
 # install pinned numba version
 # RUN conda install -c conda-forge numba==0.54.1
 
+# for some reason torch.zeros(1).numpy() crashes with error 'numpy is not available'
+# this is inplace fix (need to find the real issue)
+RUN pip install --upgrade numpy
+
 # copy scripts/examples/tests into container for end user
 WORKDIR /workspace/nemo
 COPY scripts /workspace/nemo/scripts
