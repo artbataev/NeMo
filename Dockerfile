@@ -94,7 +94,7 @@ RUN --mount=from=nemo-src,target=/tmp/nemo cd /tmp/nemo && pip install ".[all]" 
 # RUN conda install -c conda-forge numba==0.54.1
 
 # stylegan2 dependencies
-RUN pip install einops
+RUN pip install einops kornia
 
 # copy scripts/examples/tests into container for end user
 WORKDIR /workspace/nemo
