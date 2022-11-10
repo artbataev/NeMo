@@ -253,6 +253,7 @@ class RNNTLoss(Loss):
         self._blank = num_classes
         self.reduction = reduction
         self._loss = resolve_rnnt_loss(loss_name, blank_idx=self._blank, loss_kwargs=loss_kwargs)
+        self._force_float32 = loss_name in {"default", "warprnnt_numba", "warprnnt"}
 
     def reduce(self, losses, target_lengths):
 
@@ -283,7 +284,7 @@ class RNNTLoss(Loss):
 
         # Force cast joint to float32
         # TODO: Remove once Numba supports FP16
-        if log_probs.dtype != torch.float32:
+        if self._force_float32 and log_probs.dtype != torch.float32:
             logits_orig = log_probs
             log_probs = log_probs.float()
             del logits_orig  # save memory *before* computing the loss
