@@ -33,7 +33,9 @@ class ManifestEN:
 
 
 def item_iter(
-    manifests_files: Union[str, List[str]], parse_func: Callable[[str, Optional[str]], Dict[str, Any]] = None
+    manifests_files: Union[str, List[str]],
+    parse_func: Callable[[str, Optional[str]], Dict[str, Any]] = None,
+    in_memory=False,
 ) -> Iterator[Dict[str, Any]]:
     """Iterate through json lines of provided manifests.
 
@@ -52,6 +54,8 @@ def item_iter(
             of a manifest and optionally the manifest file itself,
             and parses it, returning a dictionary mapping from str -> Any.
 
+        in_memory: Read manifest into memory instead of iterating
+
     Yields:
         Parsed key to value item dicts.
 
@@ -68,7 +72,7 @@ def item_iter(
     k = -1
     for manifest_file in manifests_files:
         with open(expanduser(manifest_file), 'r') as f:
-            for line in f:
+            for line in f.readlines() if in_memory else f:
                 k += 1
                 item = parse_func(line, manifest_file)
                 item['id'] = k

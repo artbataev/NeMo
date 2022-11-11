@@ -217,7 +217,11 @@ class ASRAudioText(AudioText):
             [],
         )
         speakers, orig_srs, token_labels, langs = [], [], [], []
-        for item in manifest.item_iter(manifests_files):
+        item_iter_kwargs = dict()
+        if "in_memory" in kwargs:
+            item_iter_kwargs["in_memory"] = kwargs.pop("in_memory")
+            logging.info(f"Iterating manifest, params: {item_iter_kwargs}")
+        for item in manifest.item_iter(manifests_files, **item_iter_kwargs):
             ids.append(item['id'])
             audio_files.append(item['audio_file'])
             durations.append(item['duration'])
@@ -609,7 +613,8 @@ class DiarizationLabel(_Collection):
                 data.sort(key=lambda entity: entity.duration)
 
         logging.info(
-            "Filtered duration for loading collection is %f.", duration_filtered,
+            "Filtered duration for loading collection is %f.",
+            duration_filtered,
         )
         logging.info(f"Total {len(data)} session files loaded accounting to # {len(audio_files)} audio clips")
 

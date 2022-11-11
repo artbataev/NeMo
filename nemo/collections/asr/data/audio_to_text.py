@@ -122,6 +122,7 @@ class ASRManifestProcessor:
         eos_id: Optional[int] = None,
         pad_id: int = 0,
         index_by_file_id: bool = False,
+        in_memory: bool = False,
     ):
         self.parser = parser
 
@@ -132,6 +133,7 @@ class ASRManifestProcessor:
             max_duration=max_duration,
             max_number=max_utts,
             index_by_file_id=index_by_file_id,
+            in_memory=in_memory,
         )
 
         self.eos_id = eos_id
@@ -262,6 +264,7 @@ class _AudioTextDataset(Dataset):
         pad_id: int = 0,
         return_sample_id: bool = False,
         channel_selector: Optional[ChannelSelectorType] = None,
+        in_memory: bool = False,
     ):
         if type(manifest_filepath) == str:
             manifest_filepath = manifest_filepath.split(",")
@@ -275,6 +278,7 @@ class _AudioTextDataset(Dataset):
             bos_id=bos_id,
             eos_id=eos_id,
             pad_id=pad_id,
+            in_memory=in_memory,
         )
         self.featurizer = WaveformFeaturizer(sample_rate=sample_rate, int_values=int_values, augmentor=augmentor)
         self.trim = trim
@@ -382,6 +386,7 @@ class AudioToCharDataset(_AudioTextDataset):
         parser: Union[str, Callable] = 'en',
         return_sample_id: bool = False,
         channel_selector: Optional[ChannelSelectorType] = None,
+        in_memory: bool = False,
     ):
         self.labels = labels
 
@@ -632,6 +637,7 @@ class _TarredAudioToTextDataset(IterableDataset):
         global_rank: int = 0,
         world_size: int = 0,
         return_sample_id: bool = False,
+        in_memory: bool = False,
     ):
         self.manifest_processor = ASRManifestProcessor(
             manifest_filepath=manifest_filepath,
@@ -643,6 +649,7 @@ class _TarredAudioToTextDataset(IterableDataset):
             eos_id=eos_id,
             pad_id=pad_id,
             index_by_file_id=True,  # Must set this so the manifest lines can be indexed by file ID
+            in_memory=in_memory,
         )
 
         self.featurizer = WaveformFeaturizer(sample_rate=sample_rate, int_values=int_values, augmentor=augmentor)
@@ -902,6 +909,7 @@ class TarredAudioToCharDataset(_TarredAudioToTextDataset):
         global_rank: int = 0,
         world_size: int = 0,
         return_sample_id: bool = False,
+        in_memory: bool = False,
     ):
         self.labels = labels
 
@@ -927,6 +935,7 @@ class TarredAudioToCharDataset(_TarredAudioToTextDataset):
             global_rank=global_rank,
             world_size=world_size,
             return_sample_id=return_sample_id,
+            in_memory=in_memory,
         )
 
 
@@ -1027,6 +1036,7 @@ class TarredAudioToBPEDataset(_TarredAudioToTextDataset):
         global_rank: int = 0,
         world_size: int = 0,
         return_sample_id: bool = False,
+        in_memory: bool = False,
     ):
         if use_start_end_token and hasattr(tokenizer, "bos_id") and tokenizer.bos_id > 0:
             bos_id = tokenizer.bos_id
@@ -1079,6 +1089,7 @@ class TarredAudioToBPEDataset(_TarredAudioToTextDataset):
             global_rank=global_rank,
             world_size=world_size,
             return_sample_id=return_sample_id,
+            in_memory=in_memory,
         )
 
 
