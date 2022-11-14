@@ -150,6 +150,7 @@ def get_concat_bpe_dataset(
     global_rank: int,
     world_size: int,
     augmentor: Optional['AudioAugmentor'] = None,
+    in_memory: bool = False,
 ) -> ConcatDataset:
     """
     Instantiates a ContactDataset based on several Byte Pair Encoding / Word Piece Encoding based AudioToBPEDatasets.
@@ -169,7 +170,7 @@ def get_concat_bpe_dataset(
     for manifest_filepath in manifest_filepaths:
         conf = copy.deepcopy(config)
         conf['manifest_filepath'] = manifest_filepath
-        dataset = get_bpe_dataset(config=conf, tokenizer=tokenizer, augmentor=augmentor)
+        dataset = get_bpe_dataset(config=conf, tokenizer=tokenizer, augmentor=augmentor, in_memory=in_memory)
         datasets.append(dataset)
 
     dataset = ConcatDataset(
@@ -184,7 +185,10 @@ def get_concat_bpe_dataset(
 
 
 def get_bpe_dataset(
-    config: dict, tokenizer: 'TokenizerSpec', augmentor: Optional['AudioAugmentor'] = None
+    config: dict,
+    tokenizer: 'TokenizerSpec',
+    augmentor: Optional['AudioAugmentor'] = None,
+    in_memory=False,
 ) -> audio_to_text.AudioToBPEDataset:
     """
     Instantiates a Byte Pair Encoding / Word Piece Encoding based AudioToBPEDataset.
@@ -210,6 +214,7 @@ def get_bpe_dataset(
         use_start_end_token=config.get('use_start_end_token', True),
         return_sample_id=config.get('return_sample_id', False),
         channel_selector=config.get('channel_selector', None),
+        in_memory=in_memory,
     )
     return dataset
 
@@ -272,6 +277,7 @@ def get_tarred_dataset(
     world_size: int,
     tokenizer: Optional['TokenizerSpec'] = None,
     augmentor: Optional['AudioAugmentor'] = None,
+    in_memory: bool = False,
 ) -> Union[audio_to_text.TarredAudioToBPEDataset, audio_to_text.TarredAudioToCharDataset]:
     """
     Instantiates a Word Piece/BPE Encoding based TarredAudioToBPEDataset or a char based TarredAudioToCharDataset.
@@ -337,6 +343,7 @@ def get_tarred_dataset(
                 global_rank=global_rank,
                 world_size=world_size,
                 return_sample_id=config.get('return_sample_id', False),
+                in_memory=in_memory,
             )
         else:
             dataset = audio_to_text.TarredAudioToBPEDataset(
@@ -355,6 +362,7 @@ def get_tarred_dataset(
                 global_rank=global_rank,
                 world_size=world_size,
                 return_sample_id=config.get('return_sample_id', False),
+                in_memory=in_memory,
             )
         if bucketing_weights:
             [datasets.append(dataset) for _ in range(bucketing_weights[dataset_idx])]

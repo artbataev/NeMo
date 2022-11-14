@@ -277,7 +277,10 @@ class EncDecRNNTBPEModel(EncDecRNNTModel, ASRBPEMixin):
 
         # Setup decoding object
         self.decoding = RNNTBPEDecoding(
-            decoding_cfg=self.cfg.decoding, decoder=self.decoder, joint=self.joint, tokenizer=self.tokenizer,
+            decoding_cfg=self.cfg.decoding,
+            decoder=self.decoder,
+            joint=self.joint,
+            tokenizer=self.tokenizer,
         )
 
         # Setup wer object
@@ -374,7 +377,10 @@ class EncDecRNNTBPEModel(EncDecRNNTModel, ASRBPEMixin):
         decoding_cfg = OmegaConf.merge(decoding_cls, decoding_cfg)
 
         self.decoding = RNNTBPEDecoding(
-            decoding_cfg=decoding_cfg, decoder=self.decoder, joint=self.joint, tokenizer=self.tokenizer,
+            decoding_cfg=decoding_cfg,
+            decoder=self.decoder,
+            joint=self.joint,
+            tokenizer=self.tokenizer,
         )
 
         self.wer = RNNTBPEWER(
@@ -423,7 +429,10 @@ class EncDecRNNTBPEModel(EncDecRNNTModel, ASRBPEMixin):
         decoding_cfg = OmegaConf.merge(decoding_cls, decoding_cfg)
 
         self.decoding = RNNTBPEDecoding(
-            decoding_cfg=decoding_cfg, decoder=self.decoder, joint=self.joint, tokenizer=self.tokenizer,
+            decoding_cfg=decoding_cfg,
+            decoder=self.decoder,
+            joint=self.joint,
+            tokenizer=self.tokenizer,
         )
 
         self.wer = RNNTBPEWER(
@@ -456,6 +465,8 @@ class EncDecRNNTBPEModel(EncDecRNNTModel, ASRBPEMixin):
         shuffle = config['shuffle']
 
         is_concat = config.get('is_concat', False)
+        in_memory = config.get('in_memory', False)
+        logging.info(f"data loader, in memory: {in_memory}")
         if is_concat:
             if 'concat_sampling' in config and config['concat_sampling'] is None:
                 logging.warning(
@@ -494,6 +505,7 @@ class EncDecRNNTBPEModel(EncDecRNNTModel, ASRBPEMixin):
                     global_rank=self.global_rank,
                     world_size=self.world_size,
                     augmentor=augmentor,
+                    in_memory=in_memory,
                 )
             else:
                 dataset = audio_to_text_dataset.get_tarred_dataset(
@@ -503,6 +515,7 @@ class EncDecRNNTBPEModel(EncDecRNNTModel, ASRBPEMixin):
                     global_rank=self.global_rank,
                     world_size=self.world_size,
                     augmentor=augmentor,
+                    in_memory=in_memory,
                 )
             shuffle = False
         else:
@@ -517,10 +530,11 @@ class EncDecRNNTBPEModel(EncDecRNNTModel, ASRBPEMixin):
                     global_rank=self.global_rank,
                     world_size=self.world_size,
                     augmentor=augmentor,
+                    in_memory=in_memory,
                 )
             else:
                 dataset = audio_to_text_dataset.get_bpe_dataset(
-                    config=config, tokenizer=self.tokenizer, augmentor=augmentor
+                    config=config, tokenizer=self.tokenizer, augmentor=augmentor, in_memory=in_memory
                 )
 
         if hasattr(dataset, 'collate_fn'):

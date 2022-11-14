@@ -238,8 +238,7 @@ class _AudioTextDataset(Dataset):
 
     @property
     def output_types(self) -> Optional[Dict[str, NeuralType]]:
-        """Returns definitions of module output ports.
-               """
+        """Returns definitions of module output ports."""
         return {
             'audio_signal': NeuralType(('B', 'T'), AudioSignal()),
             'a_sig_length': NeuralType(tuple('B'), LengthsType()),
@@ -356,8 +355,7 @@ class AudioToCharDataset(_AudioTextDataset):
 
     @property
     def output_types(self) -> Optional[Dict[str, NeuralType]]:
-        """Returns definitions of module output ports.
-               """
+        """Returns definitions of module output ports."""
         return {
             'audio_signal': NeuralType(('B', 'T'), AudioSignal()),
             'a_sig_length': NeuralType(tuple('B'), LengthsType()),
@@ -409,6 +407,7 @@ class AudioToCharDataset(_AudioTextDataset):
             pad_id=pad_id,
             return_sample_id=return_sample_id,
             channel_selector=channel_selector,
+            in_memory=in_memory,
         )
 
 
@@ -451,8 +450,7 @@ class AudioToBPEDataset(_AudioTextDataset):
 
     @property
     def output_types(self) -> Optional[Dict[str, NeuralType]]:
-        """Returns definitions of module output ports.
-               """
+        """Returns definitions of module output ports."""
         return {
             'audio_signal': NeuralType(('B', 'T'), AudioSignal()),
             'a_sig_length': NeuralType(tuple('B'), LengthsType()),
@@ -475,6 +473,7 @@ class AudioToBPEDataset(_AudioTextDataset):
         use_start_end_token: bool = True,
         return_sample_id: bool = False,
         channel_selector: Optional[ChannelSelectorType] = None,
+        in_memory: bool = False,
     ):
         if use_start_end_token and hasattr(tokenizer, "bos_id") and tokenizer.bos_id > 0:
             bos_id = tokenizer.bos_id
@@ -524,6 +523,7 @@ class AudioToBPEDataset(_AudioTextDataset):
             trim=trim,
             return_sample_id=return_sample_id,
             channel_selector=channel_selector,
+            in_memory=in_memory,
         )
 
 
@@ -708,8 +708,7 @@ class _TarredAudioToTextDataset(IterableDataset):
         return TarredAudioFilter(self.manifest_processor.collection)
 
     def _loop_offsets(self, iterator):
-        """This function is used to iterate through utterances with different offsets for each file.
-        """
+        """This function is used to iterate through utterances with different offsets for each file."""
 
         class TarredAudioLoopOffsets:
             def __init__(self, collection):
@@ -742,8 +741,7 @@ class _TarredAudioToTextDataset(IterableDataset):
         return _speech_collate_fn(batch, self.pad_id)
 
     def _build_sample(self, tup):
-        """Builds the training sample by combining the data from the WebDataset with the manifest info.
-        """
+        """Builds the training sample by combining the data from the WebDataset with the manifest info."""
         audio_bytes, audio_filename, offset_id = tup
 
         # Grab manifest entry from self.manifest_preprocessor.collection
@@ -1102,7 +1100,9 @@ class BucketingDataset(IterableDataset):
     """
 
     def __init__(
-        self, dataset: IterableDataset, bucketing_batch_size: int,
+        self,
+        dataset: IterableDataset,
+        bucketing_batch_size: int,
     ):
         self.wrapped_dataset = dataset
         self.bucketing_batch_size = bucketing_batch_size
