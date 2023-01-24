@@ -70,7 +70,11 @@ def main(cfg):
     exp_manager(trainer, cfg.get("exp_manager", None))
 
     asr_model = ASRWithTTSModel.from_asr_config(
-        asr_cfg=cfg.model, asr_model_type=cfg.asr_model_type, tts_model_path=cfg.tts_model_path, trainer=trainer
+        asr_cfg=cfg.model,
+        asr_model_type=cfg.asr_model_type,
+        tts_model_path=cfg.tts_model_path,
+        vocoder_model_path=cfg.get("vocoder_model_path", None),
+        trainer=trainer,
     )
 
     # Initialize the weights of the model from another model, if provided via config

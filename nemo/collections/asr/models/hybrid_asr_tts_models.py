@@ -22,6 +22,7 @@ import torch
 from omegaconf import MISSING, DictConfig, OmegaConf, open_dict
 from pytorch_lightning import Trainer
 from torch.nn.utils.rnn import pad_sequence
+from torchaudio.transforms import GriffinLim, Resample
 
 from nemo.collections.asr.data.audio_to_text_dali import DALIOutputs
 from nemo.collections.asr.data.text_to_text import (
@@ -35,7 +36,8 @@ from nemo.collections.asr.modules.conformer_encoder import ConformerEncoder
 from nemo.collections.asr.parts.preprocessing.features import clean_spectrogram_batch, normalize_batch
 from nemo.collections.asr.parts.submodules.batchnorm import replace_bn_with_fused_bn_all
 from nemo.collections.common.data import ConcatDataset, ConcatMapDataset
-from nemo.collections.tts.models import FastPitchModel
+from nemo.collections.tts.models import FastPitchModel, UnivNetModel
+from nemo.collections.tts.models.base import Vocoder
 from nemo.core.classes import Dataset, ModelPT
 from nemo.core.classes.common import PretrainedModelInfo
 from nemo.utils import logging
@@ -87,6 +89,7 @@ class ASRWithTTSModel(ASRModel):
 
     asr_model: Union[EncDecRNNTBPEModel, EncDecCTCModelBPE]
     tts_model: FastPitchModel
+    vocoder_model: Optional[Union[Vocoder, GriffinLim]]
 
     class ASRModelTypes(PrettyStrEnum):
         """
@@ -142,6 +145,47 @@ class ASRWithTTSModel(ASRModel):
         self.register_submodule_artifacts(self.tts_model, "tts_model")
         self.tts_model.freeze()  # tts model should be always frozen
 
+        # vocoder model
+        if cfg.get("vocoder_model_path") is not None:
+            # if cfg.vocoder_model_path == "griffin_lim":
+            #     sample_rate = self.tts_model.cfg.sample_rate
+            #     if "n_window_size" in self.tts_model.cfg:
+            #         win_length = self.tts_model.cfg.n_window_size
+            #     else:
+            #         win_length = int(self.tts_model.cfg.sample_rate * self.tts_model.cfg.window_size)
+            #     if "n_window_stride" in self.tts_model.cfg:
+            #         hop_length = self.tts_model.cfg.n_window_stride
+            #     else:
+            #         hop_length = int(self.tts_model.cfg.sample_rate * self.tts_model.cfg.window_stride)
+            #
+            #     self.vocoder_model = GriffinLim(
+            #         n_fft=self.tts_model.cfg.n_fft, n_iter=50, win_length=win_length, hop_length=hop_length
+            #     )
+            #     self.filterbank = torch.tensor(
+            #         librosa.filters.mel(sr=sample_rate, n_fft=self.tts_model.cfg.n_fft, n_mels=80, fmax=8000)
+            #     )
+            # else:
+            # if path provided, restore from path
+            self.vocoder_model = UnivNetModel.restore_from(
+                cfg.vocoder_model_path, map_location=torch.device("cpu")
+            )
+            self.cfg.vocoder_model_path = (
+                None  # set to None, after save/restore model will be instantiated from config
+            )
+            self.cfg.vocoder_model = self.vocoder_model.cfg
+        elif cfg.get("vocoder_model") is not None:
+            # init from config
+            self.vocoder_model = ModelPT.from_config_dict(cfg.vocoder_model)
+        else:
+            self.vocoder_model = None
+        if self.vocoder_model is not None:
+            self.register_submodule_artifacts(self.vocoder_model, "vocoder_model")
+            self.vocoder_model.freeze()  # vocoder model should be always frozen
+            if self.vocoder_model.cfg.sample_rate != self.asr_model.cfg.sample_rate:
+                self.resampler = Resample(self.vocoder_model.cfg.sample_rate, self.asr_model.cfg.sample_rate)
+            else:
+                self.resampler = None
+
         if cfg.asr_model_path is not None:
             # if path provided, restore from path
             self.asr_model = ASRModel.restore_from(cfg.asr_model_path, map_location=torch.device("cpu"))
@@ -191,6 +235,7 @@ class ASRWithTTSModel(ASRModel):
         asr_cfg: DictConfig,
         asr_model_type: Union[str, ASRModelTypes],
         tts_model_path: Union[str, Path],
+        vocoder_model_path: Optional[Union[str, Path]] = None,
         trainer: Trainer = None,
     ):
         """
@@ -203,6 +248,8 @@ class ASRWithTTSModel(ASRModel):
                 asr_model=None,
                 tts_model_path=f"{tts_model_path}",
                 tts_model=None,
+                vocoder_model=None,
+                vocoder_model_path=f"{vocoder_model_path}" if vocoder_model_path is not None else None,
                 enhancer_model_path=None,
                 enhancer_model=None,
                 asr_model_type=f"{model_type}",
@@ -279,6 +326,8 @@ class ASRWithTTSModel(ASRModel):
         Add optimizer and scheduler to asr model, to allow `train_step` on ASR model
         """
         self.tts_model.freeze()
+        if self.vocoder_model is not None:
+            self.vocoder_model.freeze()
         optimizer, scheduler = super().setup_optimization(optim_config=optim_config, optim_kwargs=optim_kwargs)
         # set ASR model optimizer/scheduler to allow training_step on asr_model
         self.asr_model._optimizer = optimizer
@@ -341,11 +390,15 @@ class ASRWithTTSModel(ASRModel):
         """Unfreeze the ASR model, keep TTS model frozen."""
         super().unfreeze()
         self.tts_model.freeze()  # tts model should be always frozen
+        if self.vocoder_model is not None:
+            self.vocoder_model.freeze()
 
     def on_fit_start(self):
         """Call asr_model on_fit_start hook, ensure TTS model is frozen"""
         self.asr_model.on_fit_start()
         self.tts_model.freeze()
+        if self.vocoder_model is not None:
+            self.vocoder_model.freeze()
 
     def train(self, mode: bool = True):
         """Train mode, ensure TTS model is frozen"""
@@ -360,7 +413,10 @@ class ASRWithTTSModel(ASRModel):
         with torch.no_grad():
             spectrogram, spectrogram_len, *_ = self.tts_model(text=tts_texts, durs=None, pitch=None, speaker=speakers)
             # TODO: use enhancer
-            spectrogram, *_ = normalize_batch(spectrogram, spectrogram_len, self.asr_model.cfg.preprocessor.normalize)
+            if self.vocoder_model is None:
+                spectrogram, *_ = normalize_batch(
+                    spectrogram, spectrogram_len, self.asr_model.cfg.preprocessor.normalize
+                )
             return spectrogram, spectrogram_len
 
     def _get_batch_spect(self, batch: Union[TextToTextBatch, TextOrAudioToTextBatch, tuple]):
@@ -397,6 +453,30 @@ class ASRWithTTSModel(ASRModel):
             )
         spectrogram = clean_spectrogram_batch(spectrogram, spectrogram_len)
         return spectrogram.detach(), spectrogram_len.detach(), transcript, transcript_len
+
+    def _get_batch_waveform(self, batch: Union[TextToTextBatch, TextOrAudioToTextBatch, tuple]):
+        """Get batch with raw audio from text-only, audio-text or mixed batch data"""
+        assert self.vocoder_model is not None
+        if isinstance(batch, TextToTextBatch):
+            spectrogram, spectrogram_len = self._get_tts_spectrogram(batch.tts_texts, batch.speakers)
+            audio_signal_len = spectrogram_len * self.vocoder_model.cfg.preprocessor.n_window_stride
+            # if isinstance(self.vocoder_model, GriffinLim):
+            #     spectrogram = torch.exp(spectrogram)
+            #     self.filterbank = self.filterbank.to(spectrogram.device)
+            #     spect_tr = (spectrogram.transpose(1, 2) @ self.filterbank).transpose(1, 2)
+            #     audio_signal = self.vocoder_model(spect_tr)
+            # else:
+            audio_signal = self.vocoder_model.convert_spectrogram_to_audio(spec=spectrogram)
+            if self.resampler is not None:
+                audio_signal = self.resampler(audio_signal)
+                audio_signal_len = audio_signal_len * self.asr_model.cfg.sample_rate // self.tts_model.cfg.sample_rate
+            transcript = batch.transcripts
+            transcript_len = batch.transcript_lengths
+        elif isinstance(batch, TextOrAudioToTextBatch):
+            raise NotImplementedError
+        else:
+            audio_signal, audio_signal_len, transcript, transcript_len, *_ = batch  # audio batch: 4 or 5 elements
+        return audio_signal.detach(), audio_signal_len.detach(), transcript, transcript_len
 
     def setup_training_data(self, train_data_config: Optional[Union[DictConfig, Dict]]):
         """
@@ -514,19 +594,25 @@ class ASRWithTTSModel(ASRModel):
         - call training_step on ASR model
         """
         assert not self.tts_model.training
+        assert self.vocoder_model is None or not self.vocoder_model.training
         if isinstance(batch, DALIOutputs):
             return self.asr_model.training_step(batch=batch, batch_nb=batch_nb)
+        if self.vocoder_model is None:
+            with torch.no_grad():
+                spectrogram, spectrogram_len, transcript, transcript_len = self._get_batch_spect(batch)
+            # TODO: maybe support precomputed without DALIOutputs
+            return self.asr_model.training_step(
+                batch=DALIOutputs(
+                    dict(
+                        processed_signal=spectrogram,
+                        processed_signal_len=spectrogram_len,
+                        transcript=transcript,
+                        transcript_len=transcript_len,
+                    )
+                ),
+                batch_nb=batch_nb,
+            )
+        # vocoder model
         with torch.no_grad():
-            spectrogram, spectrogram_len, transcript, transcript_len = self._get_batch_spect(batch)
-        # TODO: maybe support precomputed without DALIOutputs
-        return self.asr_model.training_step(
-            batch=DALIOutputs(
-                dict(
-                    processed_signal=spectrogram,
-                    processed_signal_len=spectrogram_len,
-                    transcript=transcript,
-                    transcript_len=transcript_len,
-                )
-            ),
-            batch_nb=batch_nb,
-        )
+            batch_waveform = self._get_batch_waveform(batch)
+        return self.asr_model.training_step(batch=batch_waveform, batch_nb=batch_nb)
