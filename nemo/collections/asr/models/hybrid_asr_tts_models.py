@@ -22,9 +22,9 @@ import torch
 from omegaconf import MISSING, DictConfig, OmegaConf, open_dict
 from pytorch_lightning import Trainer
 from torch.nn.utils.rnn import pad_sequence
-from torchaudio.transforms import GriffinLim, Resample
 
 from nemo.collections.asr.data.audio_to_text_dali import DALIOutputs
+from nemo.collections.asr.data.audio_to_text_dataset import get_audio_to_text_bpe_dataset_from_config
 from nemo.collections.asr.data.text_to_text import (
     TextOrAudioToTextBatch,
     TextToTextBatch,
@@ -36,12 +36,12 @@ from nemo.collections.asr.modules.conformer_encoder import ConformerEncoder
 from nemo.collections.asr.parts.preprocessing.features import clean_spectrogram_batch, normalize_batch
 from nemo.collections.asr.parts.submodules.batchnorm import replace_bn_with_fused_bn_all
 from nemo.collections.common.data import ConcatDataset, ConcatMapDataset
-from nemo.collections.tts.models import FastPitchModel, UnivNetModel
-from nemo.collections.tts.models.base import Vocoder
-from nemo.core.classes import Dataset, ModelPT
+from nemo.collections.tts.models import FastPitchModel, SpectrogramEnhancerModel
+from nemo.core.classes import Dataset
 from nemo.core.classes.common import PretrainedModelInfo
 from nemo.utils import logging
 from nemo.utils.enum import PrettyStrEnum
+from nemo.utils.exceptions import NeMoBaseException
 
 
 def _fuse_bn_in_conformer(asr_model: ASRModel):
@@ -89,6 +89,7 @@ class ASRWithTTSModel(ASRModel):
 
     asr_model: Union[EncDecRNNTBPEModel, EncDecCTCModelBPE]
     tts_model: FastPitchModel
+    enhancer_model: Optional[SpectrogramEnhancerModel]
     vocoder_model: Optional[Union[Vocoder, GriffinLim]]
 
     class ASRModelTypes(PrettyStrEnum):
@@ -118,12 +119,37 @@ class ASRWithTTSModel(ASRModel):
     def list_available_models(cls) -> List[PretrainedModelInfo]:
         return []
 
+    @classmethod
+    def _check_config(cls, cfg: DictConfig):
+        """
+        Check that all required fields are present in config
+        Structured configs are not compatible with model serialization, so we check fields manually
+        """
+        expected_fields = [
+            # asr
+            "asr_model",
+            "asr_model_path",
+            "asr_model_fuse_bn",
+            "asr_model_type",
+            # tts
+            "tts_model",
+            "tts_model_path",
+            # enhancer
+            "enhancer_model_path",
+            "enhancer_model",
+        ]
+        for field in expected_fields:
+            if field not in cfg:
+                raise NeMoBaseException(f"Field {field} is required in config (possibly should be None/null)")
+
     def __init__(self, cfg: DictConfig, trainer: Trainer = None):
         self._full_init_guard = False
+
+        self._check_config(cfg)  # check all required keys are in config
+
         # setup datasets and optimizer after model is fully initialized
         # since it's done automatically, remove options from config
-        cfg = copy.deepcopy(cfg)
-        # avoid dataset and optim setup here
+        cfg = copy.deepcopy(cfg)  # copy to avoid modifying original config
         with open_dict(cfg):
             train_ds_cfg = cfg.pop("train_ds", None)
             validation_ds_cfg = cfg.pop("validation_ds", None)
@@ -133,81 +159,51 @@ class ASRWithTTSModel(ASRModel):
         super().__init__(cfg, trainer=trainer)
 
         # tts model
-        if cfg.tts_model_path is not None:
-            # if path provided, restore from path
-            self.tts_model = FastPitchModel.restore_from(cfg.tts_model_path, map_location=torch.device("cpu"))
-            self.cfg.tts_model_path = None  # set to None, after save/restore model will be instantiated from config
-            self.cfg.tts_model = self.tts_model.cfg
+        if cfg.tts_model is not None:
+            self.register_nemo_submodule("tts_model", config_field="tts_model", model=FastPitchModel(cfg.tts_model))
         else:
-            # init from config
-            assert cfg.tts_model is not None
-            self.tts_model = ModelPT.from_config_dict(cfg.tts_model)
-        self.register_submodule_artifacts(self.tts_model, "tts_model")
+            if cfg.tts_model_path is None:
+                raise NeMoBaseException("Either tts_model or tts_model_path should be provided")
+            self.register_nemo_submodule(
+                "tts_model",
+                config_field="tts_model",
+                model=FastPitchModel.restore_from(f"{cfg.tts_model_path}", map_location=torch.device("cpu")),
+            )
         self.tts_model.freeze()  # tts model should be always frozen
 
-        # vocoder model
-        if cfg.get("vocoder_model_path") is not None:
-            # if cfg.vocoder_model_path == "griffin_lim":
-            #     sample_rate = self.tts_model.cfg.sample_rate
-            #     if "n_window_size" in self.tts_model.cfg:
-            #         win_length = self.tts_model.cfg.n_window_size
-            #     else:
-            #         win_length = int(self.tts_model.cfg.sample_rate * self.tts_model.cfg.window_size)
-            #     if "n_window_stride" in self.tts_model.cfg:
-            #         hop_length = self.tts_model.cfg.n_window_stride
-            #     else:
-            #         hop_length = int(self.tts_model.cfg.sample_rate * self.tts_model.cfg.window_stride)
-            #
-            #     self.vocoder_model = GriffinLim(
-            #         n_fft=self.tts_model.cfg.n_fft, n_iter=50, win_length=win_length, hop_length=hop_length
-            #     )
-            #     self.filterbank = torch.tensor(
-            #         librosa.filters.mel(sr=sample_rate, n_fft=self.tts_model.cfg.n_fft, n_mels=80, fmax=8000)
-            #     )
-            # else:
-            # if path provided, restore from path
-            self.vocoder_model = UnivNetModel.restore_from(
-                cfg.vocoder_model_path, map_location=torch.device("cpu")
-            )
-            self.cfg.vocoder_model_path = (
-                None  # set to None, after save/restore model will be instantiated from config
-            )
-            self.cfg.vocoder_model = self.vocoder_model.cfg
-        elif cfg.get("vocoder_model") is not None:
-            # init from config
-            self.vocoder_model = ModelPT.from_config_dict(cfg.vocoder_model)
-        else:
-            self.vocoder_model = None
-        if self.vocoder_model is not None:
-            self.register_submodule_artifacts(self.vocoder_model, "vocoder_model")
-            self.vocoder_model.freeze()  # vocoder model should be always frozen
-            if self.vocoder_model.cfg.sample_rate != self.asr_model.cfg.sample_rate:
-                self.resampler = Resample(self.vocoder_model.cfg.sample_rate, self.asr_model.cfg.sample_rate)
-            else:
-                self.resampler = None
-
-        if cfg.asr_model_path is not None:
-            # if path provided, restore from path
-            self.asr_model = ASRModel.restore_from(cfg.asr_model_path, map_location=torch.device("cpu"))
-            self.cfg.asr_model_path = None  # set to None, after save/restore model will be instantiated from config
-            self.asr_model_type = self.ASRModelTypes.from_asr_model(self.asr_model)
-            self.cfg.asr_model_type = str(self.asr_model_type)
-        else:
-            # init from config
+        if cfg.asr_model is not None:
             self.asr_model_type = self.ASRModelTypes(cfg.asr_model_type)  # convert to enum
-            self.asr_model = self.asr_model_type.get_asr_cls()(cfg.asr_model)  # instantiate
-            self.cfg.asr_model = self.asr_model.cfg
-        self.register_submodule_artifacts(self.asr_model, "asr_model")
+            self.register_nemo_submodule(
+                "asr_model", config_field="asr_model", model=self.asr_model_type.get_asr_cls()(cfg.asr_model)
+            )
+        else:
+            if cfg.asr_model_path is None:
+                raise NeMoBaseException("Either asr_model or asr_model_path should be provided")
+            self.register_nemo_submodule(
+                "asr_model",
+                config_field="asr_model",
+                model=ASRModel.restore_from(f"{cfg.asr_model_path}", map_location=torch.device("cpu")),
+            )
+            self.asr_model_type = self.ASRModelTypes.from_asr_model(self.asr_model)
+            self.cfg.asr_model_type = f"{self.asr_model_type}"  # save to config
 
-        # replace BatchNorm with FusedBatchNorm
-        if cfg.get("asr_model_fuse_bn"):
+            # replace BatchNorm with FusedBatchNorm
+        if cfg.asr_model_fuse_bn:
             _fuse_bn_in_conformer(self.asr_model)
-            self.cfg.asr_model = self.asr_model.cfg
-            cfg.asr_model_fuse_bn = False  # no need to fuse anymore
+            self.cfg.asr_model_fuse_bn = False  # no need to fuse anymore
 
-        if cfg.enhancer_model_path is not None:
-            # TODO: add enhancer support after https://github.com/NVIDIA/NeMo/pull/5565
-            raise NotImplementedError
+        if cfg.enhancer_model is not None:
+            self.register_nemo_submodule(
+                "enhancer_model", config_field="enhancer_model", model=SpectrogramEnhancerModel(cfg.enhancer_model)
+            )
+        elif cfg.enhancer_model_path is not None:
+            self.register_nemo_submodule(
+                "enhancer_model",
+                config_field="enhancer_model",
+                model=SpectrogramEnhancerModel.restore_from(cfg.enhancer_model_path, map_location=torch.device("cpu")),
+            )
+        else:
+            self.enhancer_model = None
 
         self._full_init_guard = True
 
@@ -235,6 +231,7 @@ class ASRWithTTSModel(ASRModel):
         asr_cfg: DictConfig,
         asr_model_type: Union[str, ASRModelTypes],
         tts_model_path: Union[str, Path],
+        enhancer_model_path: Optional[Union[str, Path]] = None,
         vocoder_model_path: Optional[Union[str, Path]] = None,
         trainer: Trainer = None,
     ):
@@ -246,14 +243,12 @@ class ASRWithTTSModel(ASRModel):
             dict(
                 asr_model_path=None,
                 asr_model=None,
-                tts_model_path=f"{tts_model_path}",
-                tts_model=None,
-                vocoder_model=None,
-                vocoder_model_path=f"{vocoder_model_path}" if vocoder_model_path is not None else None,
-                enhancer_model_path=None,
-                enhancer_model=None,
                 asr_model_type=f"{model_type}",
                 asr_model_fuse_bn=False,  # for training from scratch always should be False
+                tts_model_path=f"{tts_model_path}",
+                tts_model=None,
+                enhancer_model_path=f"{enhancer_model_path}" if enhancer_model_path is not None else None,
+                enhancer_model=None,
                 train_ds=None,
                 validation_ds=None,
                 test_ds=None,
@@ -261,9 +256,9 @@ class ASRWithTTSModel(ASRModel):
             )
         )
 
-        asr_cfg = copy.deepcopy(asr_cfg)  # copy not to avoid original config
+        asr_cfg = copy.deepcopy(asr_cfg)  # copy not to affect original config
         with open_dict(asr_cfg):
-            for subconfig_path in ["optim", "train_ds", "validation_ds", "test_ds"]:
+            for subconfig_path in ["train_ds", "validation_ds", "test_ds", "optim"]:
                 if subconfig_path in asr_cfg:
                     cfg[subconfig_path] = asr_cfg.pop(subconfig_path)
         cfg.asr_model = asr_cfg
@@ -274,6 +269,7 @@ class ASRWithTTSModel(ASRModel):
         cls,
         asr_model_path: Union[str, Path],
         tts_model_path: Union[str, Path],
+        enhancer_model_path: Optional[Union[str, Path]] = None,
         asr_model_fuse_bn: bool = False,
         cfg: Optional[DictConfig] = None,
         trainer: Optional[Trainer] = None,
@@ -283,6 +279,7 @@ class ASRWithTTSModel(ASRModel):
         Args:
             asr_model_path: path to .nemo ASR model checkpoint
             tts_model_path: path to .nemo TTS model checkpoint
+            enhancer_model_path: path to .nemo enhancer model checkpoint
             asr_model_fuse_bn: automatically fuse batchnorm layers in ASR model
             cfg: optional config for hybrid model
             trainer: Pytorch-Lightning trainer
@@ -297,7 +294,7 @@ class ASRWithTTSModel(ASRModel):
                     asr_model=None,
                     tts_model_path=f"{tts_model_path}",
                     tts_model=None,
-                    enhancer_model_path=None,
+                    enhancer_model_path=f"{enhancer_model_path}" if enhancer_model_path is not None else None,
                     enhancer_model=None,
                     asr_model_type=None,
                     asr_model_fuse_bn=asr_model_fuse_bn,
@@ -412,6 +409,9 @@ class ASRWithTTSModel(ASRModel):
         """Get TTS spectrogram from text and speaker ids"""
         with torch.no_grad():
             spectrogram, spectrogram_len, *_ = self.tts_model(text=tts_texts, durs=None, pitch=None, speaker=speakers)
+            if self.enhancer_model is not None:
+                spectrogram = self.enhancer_model.forward(input_spectrograms=spectrogram, lengths=spectrogram_len)
+            spectrogram, *_ = normalize_batch(spectrogram, spectrogram_len, self.asr_model.cfg.preprocessor.normalize)
             # TODO: use enhancer
             if self.vocoder_model is None:
                 spectrogram, *_ = normalize_batch(
@@ -487,7 +487,14 @@ class ASRWithTTSModel(ASRModel):
             return
 
         self._update_dataset_config(dataset_name='train', config=train_data_config)
-        asr_dataset = self.asr_model._setup_dataset_from_config(train_data_config)
+        asr_dataset = get_audio_to_text_bpe_dataset_from_config(
+            train_data_config,
+            local_rank=self.local_rank,
+            global_rank=self.global_rank,
+            world_size=self.world_size,
+            tokenizer=self.asr_model.tokenizer,
+            preprocessor_cfg=self.asr_model.cfg.get("preprocessor", None),
+        )
 
         dataset_iterable = True
         if asr_dataset is not None and isinstance(asr_dataset, Dataset):
@@ -594,6 +601,22 @@ class ASRWithTTSModel(ASRModel):
         - call training_step on ASR model
         """
         assert not self.tts_model.training
+        if isinstance(batch, DALIOutputs):
+            return self.asr_model.training_step(batch=batch, batch_nb=batch_nb)
+        with torch.no_grad():
+            spectrogram, spectrogram_len, transcript, transcript_len = self._get_batch_spect(batch)
+        # TODO: maybe support precomputed without DALIOutputs
+        return self.asr_model.training_step(
+            batch=DALIOutputs(
+                dict(
+                    processed_signal=spectrogram,
+                    processed_signal_len=spectrogram_len,
+                    transcript=transcript,
+                    transcript_len=transcript_len,
+                )
+            ),
+            batch_nb=batch_nb,
+        )
         assert self.vocoder_model is None or not self.vocoder_model.training
         if isinstance(batch, DALIOutputs):
             return self.asr_model.training_step(batch=batch, batch_nb=batch_nb)
