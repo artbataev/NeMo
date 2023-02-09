@@ -58,3 +58,59 @@ markers = [
     "skipduringci: marks tests that are skipped ci as they are addressed by Jenkins jobs but should be run to test user setups",
     "pleasefixme: marks tests that are broken and need fixing",
 ]
+
+
+[tool.mypy]
+python_version = "3.8"
+ignore_missing_imports = true
+allow_redefinition = true  # allow variable with the same name contain different types in code
+no_implicit_optional = false  # true is recommended by Python Docs, but currently it is widely used in NeMo
+install_types = true
+non_interactive = true # install types silently
+pretty = true
+show_error_codes = true
+warn_redundant_casts = true
+warn_unused_configs = true
+warn_unused_ignores = true
+warn_no_return = false
+check_untyped_defs = true
+disallow_untyped_defs = false  # false => allow code without types
+explicit_package_bases = true  # TODO: maybe add __init__.py where necessary, then disable
+exclude = [
+    'build/*',
+]
+disable_error_code = [
+    "attr-defined", # do not enable since we are using dynamic configs etc., too many FA
+    "union-attr", # too many FA, same for "attr-defined"
+    "arg-type", # maybe FA
+    "var-annotated", # allow using untyped code
+    "assignment", # ~500 errors, maybe FA
+    "operator", # ~250 errors, maybe FA
+    "index", # ~300 errors, maybe FA
+    "has-type", # ~220 errors, mypy can't detect correct type
+    # ========
+    # below - most important checks, it would be beneficial to fix them
+    "return-value", # ~140 errors
+    "call-arg", # ~100 errors
+    "override", # ~200 errors
+    "misc", # ~130 errors, maybe FA
+    "call-overload", # ~140 errors, maybe FA
+    "no-redef", # ~50 errors, in some cases FA, in some cases - very important (e.g. redefinition of a method)
+    "name-defined", # ~100 errors – including undefined types, important
+    # ========
+    # <20 errors per type, can be easily fixed
+    "dict-item", # ~20 errors
+    "list-item", # ~15 errors
+    "valid-type", # ~20 errors
+    "func-returns-value", # <10 errors
+    "type-var", # <10 errors
+    "name-match", # ~10 errors, incorrectly named namedtuples
+    "str-bytes-safe", # 1 error, maybe FA
+    "str-format", # 1 error
+    "empty-body", # 2 errors,
+    "literal-required", # 2 errors
+    "truthy-function", # 5 errors
+    "used-before-def", # 2 errors
+    "abstract", # 1 error
+    "typeddict-item", # 1 error
+]
