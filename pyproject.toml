@@ -91,16 +91,15 @@ disable_error_code = [
     "operator",
     "has-type",
     # =================
-    # important checks
+    # important checks, ~50-200 errors per type
     # TODO: fix them and remove from the list
-    # 50-200 errors per type
     "return-value",
     "call-arg",
     "override",
     "misc",
     "call-overload",
-    "name-defined", # including undefined types, important, should be fixed first
-    "no-redef", # in some cases FA, in some cases - very important (e.g. double definition of a method)
+    "name-defined",  # including undefined types, important, should be fixed first
+    "no-redef",  # in some cases FA, in some cases - very important (e.g. double definition of a method)
     # =================
     # <20 errors per type, can be easily fixed in most cases
     "dict-item",
@@ -109,8 +108,8 @@ disable_error_code = [
     "truthy-function",
     "func-returns-value",
     "type-var",
-    "name-match", # incorrectly named namedtuples
-    "str-bytes-safe", # 1 error, maybe FA
+    "name-match",  # incorrectly named namedtuples
+    "str-bytes-safe",  # 1 error, maybe FA
     "str-format",
     "empty-body",
     "literal-required",
