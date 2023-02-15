@@ -17,6 +17,7 @@ from functools import partial
 from typing import Any, Dict, Optional, Union
 
 import hydra
+from lion_pytorch import Lion as LionOptimizer
 import torch
 import torch.optim as optim
 from omegaconf import DictConfig, OmegaConf
@@ -40,6 +41,7 @@ AVAILABLE_OPTIMIZERS = {
     'rprop': rprop.Rprop,
     'novograd': Novograd,
     'adafactor': Adafactor,
+    'lion': LionOptimizer,
 }
 
 try:

@@ -2,3 +2,4 @@ pandas
 sacremoses>=0.0.43
 sentencepiece<1.0.0
 youtokentome>=1.0.5
+lion-pytorch>=0.0.2
