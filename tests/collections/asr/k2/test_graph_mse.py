@@ -13,9 +13,10 @@
 # limitations under the License.
 
 
+from typing import List
+
 import pytest
 import torch
-from typing import List
 
 try:
     from nemo.collections.asr.parts.k2.graph_transducer import GraphFactorizedTransducerMSELoss
