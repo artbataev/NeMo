@@ -66,7 +66,7 @@ except (ImportError, ModuleNotFoundError):
     NUMBA_RNNT_AVAILABLE = False
 
 try:
-    from nemo.collections.asr.parts.k2.graph_transducer import GraphRnntLoss, GraphFactorizedTransducerMSELoss
+    from nemo.collections.asr.parts.k2.graph_transducer import GraphFactorizedTransducerMSELoss, GraphRnntLoss
     from nemo.collections.asr.parts.k2.w_transducer import GraphWTransducerLoss
 
     K2_AVAILABLE = True
