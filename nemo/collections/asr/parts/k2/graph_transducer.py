@@ -511,7 +511,7 @@ class GraphFactorizedTransducerMSELoss(GraphRnntLoss):
         blank_logits: torch.Tensor,
         predictions: torch.Tensor,
         targets: torch.Tensor,
-        logits_lengths: torch.Tensor,
+        encoder_lengths: torch.Tensor,
         target_lengths: torch.Tensor,
     ) -> torch.Tensor:
         # logits: B x Source x Target+1 x (C+1)
@@ -542,7 +542,7 @@ class GraphFactorizedTransducerMSELoss(GraphRnntLoss):
             log_scores_logits = log_scores_logits + torch.log(scale_prob)
 
             target_fsas_vec = self.get_graphs_batched(
-                logits_lengths,
+                encoder_lengths,
                 torch.full((batch_size, predict_max_length), 1, dtype=torch.int32, device=targets.device),
                 target_lengths,
                 vocab_size=2,

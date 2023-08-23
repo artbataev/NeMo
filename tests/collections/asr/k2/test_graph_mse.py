@@ -45,9 +45,9 @@ class TestGraphFactorizedTransducerMSELoss:
         blank_logits = torch.rand((batch_size, enc_length, target_length + 1), device=device)  # -100.0
         predictions = torch.rand((batch_size, enc_length, target_length + 1, num_features), device=device)
         targets = torch.rand((batch_size, target_length, num_features), device=device)
-        logits_lengths = torch.tensor([enc_length])
+        encoder_lengths = torch.tensor([enc_length])
         targets_lengths = torch.tensor([target_length])
-        loss = criterion(blank_logits, predictions, targets, logits_lengths, targets_lengths)
+        loss = criterion(blank_logits, predictions, targets, encoder_lengths, targets_lengths)
         assert loss.item() > 1e-5
 
     @pytest.mark.unit
@@ -64,9 +64,9 @@ class TestGraphFactorizedTransducerMSELoss:
         predictions[:, 0, :-1] = targets.detach()
         blank_logits[:, 0] = -100
         blank_logits[:, :, -1] = 100
-        logits_lengths = torch.tensor([enc_length])
+        encoder_lengths = torch.tensor([enc_length])
         targets_lengths = torch.tensor([target_length])
-        loss = criterion(blank_logits, predictions, targets, logits_lengths, targets_lengths)
+        loss = criterion(blank_logits, predictions, targets, encoder_lengths, targets_lengths)
         assert loss.item() < 1e-5
 
     @pytest.mark.unit
@@ -84,9 +84,9 @@ class TestGraphFactorizedTransducerMSELoss:
         blank_logits[:, :-1, 0] = 100.0
         blank_logits[:, -1] = -100.0
         blank_logits[:, -1, -1] = 100.0
-        logits_lengths = torch.tensor([enc_length])
+        encoder_lengths = torch.tensor([enc_length])
         targets_lengths = torch.tensor([target_length])
-        loss = criterion(blank_logits, predictions, targets, logits_lengths, targets_lengths)
+        loss = criterion(blank_logits, predictions, targets, encoder_lengths, targets_lengths)
         assert loss.item() < 1e-5
 
     @pytest.mark.unit
@@ -115,7 +115,7 @@ class TestGraphFactorizedTransducerMSELoss:
                     blank_logits[0, cur_encoder_i, target_i] = 100
         assert len(alignment) > 0
         blank_logits[:, -1, -1] = 100.0  # last blank
-        logits_lengths = torch.tensor([enc_length])
+        encoder_lengths = torch.tensor([enc_length])
         targets_lengths = torch.tensor([target_length])
-        loss = criterion(blank_logits, predictions, targets, logits_lengths, targets_lengths)
+        loss = criterion(blank_logits, predictions, targets, encoder_lengths, targets_lengths)
         print(loss)

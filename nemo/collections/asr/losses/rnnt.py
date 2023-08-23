@@ -539,17 +539,17 @@ class RNNTLossMse(RNNTLoss):
             "blank_logits": NeuralType(('B', 'T', 'U'), VoidType()),
             "predictions": NeuralType(('B', 'T', 'U', 'C'), VoidType()),
             "targets": NeuralType(('B', 'U', 'C'), VoidType()),
-            "input_lengths": NeuralType(tuple('B'), LengthsType()),
+            "encoder_lengths": NeuralType(tuple('B'), LengthsType()),
             "target_lengths": NeuralType(tuple('B'), LengthsType()),
         }
 
     # @typecheck()
-    def forward(self, blank_logits, predictions, targets, input_lengths, target_lengths):
+    def forward(self, blank_logits, predictions, targets, encoder_lengths, target_lengths):
         # Cast to int 64
-        input_lengths = input_lengths.long()
+        encoder_lengths = encoder_lengths.long()
         target_lengths = target_lengths.long()
 
-        max_logit_len = input_lengths.max()
+        max_logit_len = encoder_lengths.max()
         max_targets_len = target_lengths.max()
 
         # Force cast joint to float32
@@ -590,7 +590,7 @@ class RNNTLossMse(RNNTLoss):
             blank_logits=blank_logits,
             predictions=predictions,
             targets=targets,
-            logits_lengths=input_lengths,
+            encoder_lengths=encoder_lengths,
             target_lengths=target_lengths,
         )
 
@@ -606,7 +606,7 @@ class RNNTLossMse(RNNTLoss):
             blank_logits,
             predictions,
             targets,
-            input_lengths,
+            encoder_lengths,
             target_lengths,
         )
 

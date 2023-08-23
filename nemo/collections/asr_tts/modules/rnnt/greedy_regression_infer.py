@@ -57,32 +57,26 @@ class GreedyBatchedFactorizedTransducerRegressionInfer(Typing):
             num_features = self.decoder.num_features  # todo: impl
 
             hidden = None
-            is_start = True
+            # is_start = True
             time_indices = torch.zeros(batch_size, dtype=torch.long, device=device)
-            last_predictions = torch.full(
-                [batch_size, num_features], fill_value=self._blank_index, dtype=torch.long, device=device
-            )
+            # start with zeros
+            last_predictions = torch.zeros([batch_size, num_features], dtype=torch.long, device=device)
+            # TODO: alternatives for zeros for first prediction
             is_active = torch.full([batch_size], fill_value=True, dtype=torch.bool, device=device)
             indices = torch.arange(batch_size, dtype=torch.long, device=device)
             active_indices = indices
             while active_indices.shape[0] > 0:
                 embeddings_selected = encoder_output[active_indices, time_indices[is_active]].unsqueeze(1)
                 current_batch_size = active_indices.shape[0]
-                if is_start:
-                    decoder_output, current_hidden = self.decoder.predict_first(
-                        hidden, batch_size=current_batch_size
-                    )  # todo: impl
-                    is_start = False
-                else:
-                    decoder_output, current_hidden = self.decoder.predict(
-                        last_predictions, hidden, batch_size=current_batch_size
-                    )  # todo: impl
+                decoder_output, current_hidden = self.decoder.predict(
+                    last_predictions, hidden, batch_size=current_batch_size
+                )
                 blank_logits, predictions = self.joint.joint(embeddings_selected, decoder_output)
                 predictions = predictions.squeeze(1).squeeze(1)
 
                 for current_batch_i, source_batch_i in enumerate(active_indices):
                     # label = labels[current_batch_i].item()
-                    is_blank = blank_logits[current_batch_i].item() >= 0  # sigmoid acivation => 0 -> 0.5
+                    is_blank = blank_logits[current_batch_i].item() >= 0  # sigmoid activation => 0 -> 0.5
                     if not is_blank:
                         hypotheses[source_batch_i].append(
                             predictions[current_batch_i].copy()
