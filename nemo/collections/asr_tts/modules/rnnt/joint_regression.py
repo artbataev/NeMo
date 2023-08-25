@@ -1,15 +1,99 @@
-from typing import List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import torch
 
 from nemo.collections.asr.losses.rnnt import RNNTLossMse
-from nemo.collections.asr.modules import rnnt
-from nemo.core.classes.common import PretrainedModelInfo, typecheck
+from nemo.collections.asr.modules.rnnt_abstract import AbstractRNNTJoint
+from nemo.core.classes.common import typecheck
+from nemo.core.neural_types import LossType, NeuralType, VoidType
 from nemo.utils import logging
 
 
-class FactorizedRegressionJoint(rnnt.RNNTJoint):
+class FactorizedRegressionJoint(AbstractRNNTJoint):
     loss: RNNTLossMse
+
+    @property
+    def input_types(self):
+        """Returns definitions of module input ports.
+        """
+        return {
+            "encoder_outputs": NeuralType(('B', 'D', 'T'), VoidType()),
+            "decoder_outputs": NeuralType(('B', 'D', 'T'), VoidType()),
+            "encoder_lengths": NeuralType(tuple('B'), VoidType()),
+            "targets": NeuralType(('B', 'T', 'C'), VoidType()),
+            "targets_lengths": NeuralType(tuple('B'), VoidType()),
+        }
+
+    def __init__(
+        self, jointnet: Dict[str, Any], features_dim: int, fused_batch_size: Optional[int] = None,
+    ):
+        super().__init__()
+
+        self._loss = None
+        self.features_dim = features_dim
+
+        # Required arguments
+        self.encoder_hidden = jointnet['encoder_hidden']
+        self.pred_hidden = jointnet['pred_hidden']
+        self.joint_hidden = jointnet['joint_hidden']
+        self.activation = jointnet['activation']
+
+        # Optional arguments
+        dropout = jointnet.get('dropout', 0.0)
+
+        self.pred, self.enc, self.joint_net = self._joint_net_modules(
+            num_classes=self.features_dim + 1,  # add 1 for blank symbol
+            pred_n_hidden=self.pred_hidden,
+            enc_n_hidden=self.encoder_hidden,
+            joint_n_hidden=self.joint_hidden,
+            activation=self.activation,
+            dropout=dropout,
+        )
+
+        self.fused_batch_size = fused_batch_size
+
+    @property
+    def output_types(self):
+        """Returns definitions of module output ports.
+        """
+        return {
+            "loss": NeuralType(elements_type=LossType(), optional=False),
+            # "mse": NeuralType(elements_type=LossType(), optional=True),
+        }
+
+    def _joint_net_modules(self, num_classes, pred_n_hidden, enc_n_hidden, joint_n_hidden, activation, dropout):
+        """
+        Prepare the trainable modules of the Joint Network
+
+        Args:
+            num_classes: Number of output classes (vocab size) excluding the RNNT blank token.
+            pred_n_hidden: Hidden size of the prediction network.
+            enc_n_hidden: Hidden size of the encoder network.
+            joint_n_hidden: Hidden size of the joint network.
+            activation: Activation of the joint. Can be one of [relu, tanh, sigmoid]
+            dropout: Dropout value to apply to joint.
+        """
+        pred = torch.nn.Linear(pred_n_hidden, joint_n_hidden)
+        enc = torch.nn.Linear(enc_n_hidden, joint_n_hidden)
+
+        if activation not in ['relu', 'sigmoid', 'tanh']:
+            raise ValueError("Unsupported activation for joint step - please pass one of " "[relu, sigmoid, tanh]")
+
+        activation = activation.lower()
+
+        if activation == 'relu':
+            activation = torch.nn.ReLU(inplace=True)
+        elif activation == 'sigmoid':
+            activation = torch.nn.Sigmoid()
+        elif activation == 'tanh':
+            activation = torch.nn.Tanh()
+
+        layers = (
+            [activation]
+            + ([torch.nn.Dropout(p=dropout)] if dropout else [])
+            + [torch.nn.Linear(joint_n_hidden, num_classes)]
+        )
+        return pred, enc, torch.nn.Sequential(*layers)
 
     def joint(self, f: torch.Tensor, g: torch.Tensor):
         """
@@ -54,8 +138,8 @@ class FactorizedRegressionJoint(rnnt.RNNTJoint):
         del f, g
 
         # Forward adapter modules on joint hidden
-        if self.is_adapter_available():
-            inp = self.forward_enabled_adapters(inp)
+        # if self.is_adapter_available():
+        #     inp = self.forward_enabled_adapters(inp)
 
         res = self.joint_net(inp)  # [B, T, U, V + 1]
 
@@ -178,3 +262,7 @@ class FactorizedRegressionJoint(rnnt.RNNTJoint):
             losses = self.loss.reduce(losses, target_lengths)
 
         return losses
+
+    @property
+    def num_classes_with_blank(self):
+        return 2
