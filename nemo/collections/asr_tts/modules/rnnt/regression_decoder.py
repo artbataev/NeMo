@@ -1,13 +1,19 @@
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import torch
+import torch.nn as nn
 
 from nemo.collections.asr.modules import RNNTDecoder
 from nemo.core.classes import typecheck
 from nemo.core.neural_types import LengthsType, LossType, NeuralType, VoidType
+from nemo.utils import logging
 
 
 class TransducerRegressionDecoder(RNNTDecoder):
+    def __init__(self, prednet: Dict[str, Any]):
+        super().__init__(prednet=prednet, vocab_size=2)
+        self.proj = nn.Linear(prednet["in_features"], self.pred_hidden, bias=False)
+
     @property
     def input_types(self):
         """Returns definitions of module input ports.
@@ -30,63 +36,22 @@ class TransducerRegressionDecoder(RNNTDecoder):
 
     @typecheck()
     def forward(self, targets, target_length, states=None):
-        decoded, states = self.predict(targets, state=states)  # (B, U, D)
+        decoded, states = self.predict(targets, states=states)  # (B, U, D)
         decoded = decoded.transpose(1, 2)  # (B, D, U)
         return decoded, target_length, states
 
     def predict(
-        self,
-        targets: Optional[torch.Tensor],
-        state: Optional[torch.Tensor] = None,
-        add_sos: bool = True,
-        batch_size: Optional[int] = None,
+        self, targets: torch.Tensor, states: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, List[torch.Tensor]]:
-        # Get device and dtype of current module
-        _p = next(self.parameters())
-        device = _p.device
-        dtype = _p.dtype
-
-        raise NotImplementedError
-        # If y is not None, it is of shape [B, U] with dtype long.
-        if y is not None:
-            if y.device != device:
-                y = y.to(device)
-
-            # (B, U) -> (B, U, H)
-            y = self.prediction["embed"](y)
-        else:
-            # Y is not provided, assume zero tensor with shape [B, 1, H] is required
-            # Emulates output of embedding of pad token.
-            if batch_size is None:
-                B = 1 if state is None else state[0].size(1)
-            else:
-                B = batch_size
-
-            y = torch.zeros((B, 1, self.pred_hidden), device=device, dtype=dtype)
-
-        # Prepend blank "start of sequence" symbol (zero tensor)
-        if add_sos:
-            B, U, H = y.shape
-            start = torch.zeros((B, 1, H), device=y.device, dtype=y.dtype)
-            y = torch.cat([start, y], dim=1).contiguous()  # (B, U + 1, H)
-        else:
-            start = None  # makes del call later easier
-
-        # If in training mode, and random_state_sampling is set,
-        # initialize state to random normal distribution tensor.
-        if state is None:
-            if self.random_state_sampling and self.training:
-                state = self.initialize_state(y)
-
+        # logging.warning(f"{targets.shape}")
+        device = targets.device
+        dtype = targets.dtype
+        batch_size = targets.shape[0]
+        num_features = targets.shape[-1]
+        targets = torch.cat((torch.zeros((batch_size, 1, num_features), dtype=dtype, device=device), targets), dim=1)
         # Forward step through RNN
-        y = y.transpose(0, 1)  # (U + 1, B, H)
-        g, hid = self.prediction["dec_rnn"](y, state)
+        targets = targets.transpose(0, 1)  # (U + 1, B, H)
+        logging.warning(f"{targets.shape}")
+        g, states = self.prediction["dec_rnn"](self.proj(targets), states)
         g = g.transpose(0, 1)  # (B, U + 1, H)
-
-        del y, start, state
-
-        # Adapter module forward step
-        if self.is_adapter_available():
-            g = self.forward_enabled_adapters(g)
-
-        return g, hid
+        return g, states

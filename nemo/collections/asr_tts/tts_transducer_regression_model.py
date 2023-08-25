@@ -34,7 +34,7 @@ from nemo.collections.asr_tts.modules.rnnt.regression_decoder import TransducerR
 from nemo.collections.common.tokenizers import TokenizerSpec
 from nemo.collections.tts.models import FastPitchModel
 from nemo.collections.tts.models.base import SpectrogramGenerator
-from nemo.core.classes import Exportable, ModelPT
+from nemo.core.classes import Exportable, ModelPT, typecheck
 from nemo.core.classes.common import PretrainedModelInfo, typecheck
 from nemo.core.classes.mixins import AccessMixin
 from nemo.core.neural_types import LabelsType, LengthsType, NeuralType
@@ -86,6 +86,7 @@ class TextToSpeechTransducerRegressionModel(ModelPT, Exportable):
         self.loss = RNNTLossMse(
             loss_name=loss_name, loss_kwargs=loss_kwargs, reduction=self.cfg.get("rnnt_reduction", "mean_batch"),
         )
+        self.joint.loss = self.loss
 
     # @property
     # def input_types(self) -> Optional[Dict[str, NeuralType]]:
@@ -96,15 +97,50 @@ class TextToSpeechTransducerRegressionModel(ModelPT, Exportable):
     #     }
 
     # @typecheck()
-    def forward(self, transcript: torch.Tensor, transcript_len: torch.Tensor, speaker_ids: torch.Tensor):
-        raise NotImplementedError
+    def forward(self, transcripts: torch.Tensor, transcripts_lengths: torch.Tensor):
+        encoded, _ = self.encoder(input=transcripts)
+        return encoded, transcripts_lengths
+
+    def validation_step(self, batch: AudioTextBatchWithSpeakerId, batch_idx, dataloader_idx=0):
+        encoded_text, encoded_text_lengths = self.forward(
+            transcripts=batch.transcripts, transcripts_lengths=batch.transcripts_length
+        )
+        tensorboard_logs = {}
+
+        with torch.no_grad():
+            processed_signal, processed_signal_length = self.preprocessor(
+                input_signal=batch.audio_signal, length=batch.audio_signal_length,
+            )
+
+        # TODO: non-teacher-forcing mode
+        decoded, target_len, states = self.decoder(
+            targets=processed_signal.transpose(1, 2), target_length=processed_signal_length
+        )
+
+        # Fused joint step
+        loss_value = self.joint(
+            encoder_outputs=encoded_text,
+            decoder_outputs=decoded.transpose(1, 2),
+            encoder_lengths=encoded_text_lengths,
+            targets=processed_signal.transpose(1, 2),
+            targets_lengths=processed_signal_length,
+        )
+
+        if loss_value is not None:
+            tensorboard_logs['val_loss'] = loss_value
+
+        self.log('global_step', torch.tensor(self.trainer.global_step, dtype=torch.float32))
+
+        return tensorboard_logs
 
     def setup_training_data(self, train_data_config: Union[DictConfig, Dict]):
-        # EncDecRNNTBPEModel.setup_training_data()
-        pass
+        return EncDecRNNTBPEModel.setup_training_data(self, train_data_config=train_data_config)
 
-    def setup_validation_data(self, train_data_config: Union[DictConfig, Dict]):
-        pass
+    def setup_validation_data(self, val_data_config: Optional[Union[DictConfig, Dict]]):
+        return EncDecRNNTBPEModel.setup_validation_data(self, val_data_config=val_data_config)
+
+    def _setup_dataloader_from_config(self, config: Optional[Dict]):
+        return EncDecRNNTBPEModel._setup_dataloader_from_config(self, config=config)
 
     def setup_test_data(self, test_data_config: Union[DictConfig, Dict]):
         pass

@@ -10,15 +10,15 @@ from nemo.utils import logging
 
 
 class FactorizedRegressionJoint(AbstractRNNTJoint):
-    loss: RNNTLossMse
+    loss: Optional[RNNTLossMse]
 
     @property
     def input_types(self):
         """Returns definitions of module input ports.
         """
         return {
-            "encoder_outputs": NeuralType(('B', 'D', 'T'), VoidType()),
-            "decoder_outputs": NeuralType(('B', 'D', 'T'), VoidType()),
+            "encoder_outputs": NeuralType(('B', 'T', 'D'), VoidType()),
+            "decoder_outputs": NeuralType(('B', 'T', 'D'), VoidType()),
             "encoder_lengths": NeuralType(tuple('B'), VoidType()),
             "targets": NeuralType(('B', 'T', 'C'), VoidType()),
             "targets_lengths": NeuralType(tuple('B'), VoidType()),
@@ -29,7 +29,7 @@ class FactorizedRegressionJoint(AbstractRNNTJoint):
     ):
         super().__init__()
 
-        self._loss = None
+        self.loss = None
         self.features_dim = features_dim
 
         # Required arguments
@@ -96,35 +96,6 @@ class FactorizedRegressionJoint(AbstractRNNTJoint):
         return pred, enc, torch.nn.Sequential(*layers)
 
     def joint(self, f: torch.Tensor, g: torch.Tensor):
-        """
-        Compute the joint step of the network.
-
-        Here,
-        B = Batch size
-        T = Acoustic model timesteps
-        U = Target sequence length
-        H1, H2 = Hidden dimensions of the Encoder / Decoder respectively
-        H = Hidden dimension of the Joint hidden step.
-        V = Vocabulary size of the Decoder (excluding the RNNT blank token).
-
-        NOTE:
-            The implementation of this model is slightly modified from the original paper.
-            The original paper proposes the following steps :
-            (enc, dec) -> Expand + Concat + Sum [B, T, U, H1+H2] -> Forward through joint hidden [B, T, U, H] -- *1
-            *1 -> Forward through joint final [B, T, U, V + 1].
-
-            We instead split the joint hidden into joint_hidden_enc and joint_hidden_dec and act as follows:
-            enc -> Forward through joint_hidden_enc -> Expand [B, T, 1, H] -- *1
-            dec -> Forward through joint_hidden_dec -> Expand [B, 1, U, H] -- *2
-            (*1, *2) -> Sum [B, T, U, H] -> Forward through joint final [B, T, U, V + 1].
-
-        Args:
-            f: Output of the Encoder model. A torch.Tensor of shape [B, T, H1]
-            g: Output of the Decoder model. A torch.Tensor of shape [B, U, H2]
-
-        Returns:
-            Logits / log softmaxed tensor of shape (B, T, U, V + 1).
-        """
         # f = [B, T, H1]
         f = self.enc(f)
         f.unsqueeze_(dim=2)  # (B, T, 1, H)
@@ -145,9 +116,6 @@ class FactorizedRegressionJoint(AbstractRNNTJoint):
 
         del inp
 
-        if self.preserve_memory:
-            torch.cuda.empty_cache()
-
         # currently no support for log_softmax
         # TODO: potential support for temperature
         return res
@@ -163,17 +131,18 @@ class FactorizedRegressionJoint(AbstractRNNTJoint):
     ) -> Union[torch.Tensor, List[Optional[torch.Tensor]]]:
         # encoder = (B, D, T)
         # decoder = (B, D, U) if passed, else None
-        encoder_outputs = encoder_outputs.transpose(1, 2)  # (B, T, D)
-        decoder_outputs = decoder_outputs.transpose(1, 2)  # (B, U, D)
+        # logging.warning(f"enc {encoder_outputs.shape}")
+        # logging.warning(f"dec {decoder_outputs.shape}")
+        # logging.warning(f"targets {targets.shape}")
 
         batch_size = int(encoder_outputs.shape[0])  # actual batch size
 
         # If fused joint step is required, fused batch size is required as well
-        if self._fused_batch_size is None:
+        if self.fused_batch_size is None:
             logging.warning("`fused_batch_size` recommended to be set")
             fused_batch_size = batch_size
         else:
-            fused_batch_size = self._fused_batch_size
+            fused_batch_size = self.fused_batch_size
 
         # When using fused joint step, both encoder and transcript lengths must be provided
         if (encoder_lengths is None) or (targets_lengths is None):
@@ -262,7 +231,3 @@ class FactorizedRegressionJoint(AbstractRNNTJoint):
             losses = self.loss.reduce(losses, target_lengths)
 
         return losses
-
-    @property
-    def num_classes_with_blank(self):
-        return 2

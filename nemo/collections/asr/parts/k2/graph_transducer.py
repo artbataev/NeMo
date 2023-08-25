@@ -14,11 +14,14 @@
 
 import abc
 from contextlib import nullcontext
-from typing import ContextManager
+from typing import ContextManager, Dict
+
 import torch
 import torch.nn.functional as F
 
+from nemo.core.classes import typecheck
 from nemo.core.classes.loss import Loss
+from nemo.core.neural_types import NeuralType, VoidType
 from nemo.core.utils.k2_guard import k2
 from nemo.utils.exceptions import NeMoBaseException
 
@@ -506,6 +509,17 @@ class GraphFactorizedTransducerMSELoss(GraphRnntLoss):
         )
         self.clamp_prob = clamp_prob
 
+    @property
+    def input_types(self) -> Dict[str, NeuralType]:
+        return {
+            "blank_logits": NeuralType(('B', 'T', 'T'), VoidType()),
+            "predictions": NeuralType(('B', 'T', 'T', 'C'), VoidType()),
+            "targets": NeuralType(('B', 'T', 'C'), VoidType()),
+            "encoder_lengths": NeuralType(tuple('B'), VoidType()),
+            "target_lengths": NeuralType(tuple('B'), VoidType()),
+        }
+
+    @typecheck()
     def forward(
         self,
         blank_logits: torch.Tensor,
