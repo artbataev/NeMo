@@ -101,6 +101,40 @@ class TextToSpeechTransducerRegressionModel(ModelPT, Exportable):
         encoded, _ = self.encoder(input=transcripts)
         return encoded, transcripts_lengths
 
+    def training_step(self, batch: AudioTextBatchWithSpeakerId, batch_idx, dataloader_idx=0):
+        encoded_text, encoded_text_lengths = self.forward(
+            transcripts=batch.transcripts, transcripts_lengths=batch.transcripts_length
+        )
+
+        with torch.no_grad():
+            processed_signal, processed_signal_length = self.preprocessor(
+                input_signal=batch.audio_signal, length=batch.audio_signal_length,
+            )
+
+        decoded, target_len, states = self.decoder(
+            targets=processed_signal.transpose(1, 2), target_length=processed_signal_length
+        )
+
+        # Fused joint step
+        loss_value = self.joint(
+            encoder_outputs=encoded_text,
+            decoder_outputs=decoded.transpose(1, 2),
+            encoder_lengths=encoded_text_lengths,
+            targets=processed_signal.transpose(1, 2),
+            targets_lengths=processed_signal_length,
+        )
+
+        tensorboard_logs = {
+            'train_loss': loss_value,
+            'learning_rate': self._optimizer.param_groups[0]['lr'],
+            'global_step': torch.tensor(self.trainer.global_step, dtype=torch.float32),
+        }
+
+        # Log items
+        self.log_dict(tensorboard_logs)
+
+        return {'loss': loss_value}
+
     def validation_step(self, batch: AudioTextBatchWithSpeakerId, batch_idx, dataloader_idx=0):
         encoded_text, encoded_text_lengths = self.forward(
             transcripts=batch.transcripts, transcripts_lengths=batch.transcripts_length
