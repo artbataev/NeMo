@@ -133,6 +133,14 @@ class TextToSpeechTransducerRegressionModel(ModelPT, Exportable):
 
         return tensorboard_logs
 
+    def multi_validation_epoch_end(
+        self, outputs: List[Dict[str, torch.Tensor]], dataloader_idx: int = 0
+    ) -> Optional[Dict[str, Dict[str, torch.Tensor]]]:
+        val_loss_mean = torch.stack([x['val_loss'] for x in outputs]).mean()
+        val_loss_log = {'val_loss': val_loss_mean}
+        tensorboard_logs = val_loss_log
+        return {**val_loss_log, 'log': tensorboard_logs}
+
     def setup_training_data(self, train_data_config: Union[DictConfig, Dict]):
         return EncDecRNNTBPEModel.setup_training_data(self, train_data_config=train_data_config)
 
