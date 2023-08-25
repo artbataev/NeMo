@@ -51,7 +51,7 @@ class TransducerRegressionDecoder(RNNTDecoder):
         targets = torch.cat((torch.zeros((batch_size, 1, num_features), dtype=dtype, device=device), targets), dim=1)
         # Forward step through RNN
         targets = targets.transpose(0, 1)  # (U + 1, B, H)
-        logging.warning(f"{targets.shape}")
+        # logging.warning(f"{targets.shape}")
         g, states = self.prediction["dec_rnn"](self.proj(targets), states)
         g = g.transpose(0, 1)  # (B, U + 1, H)
         return g, states

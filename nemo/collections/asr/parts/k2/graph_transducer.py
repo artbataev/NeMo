@@ -136,6 +136,7 @@ class GraphTransducerLossBase(Loss):
             composed = k2.connect(composed)
         return composed
 
+    @torch.inference_mode(False)
     def get_graphs_batched(
         self, logits_lengths: torch.Tensor, targets: torch.Tensor, target_lengths: torch.Tensor, vocab_size: int
     ) -> "k2.Fsa":
