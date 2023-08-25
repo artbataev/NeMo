@@ -527,11 +527,9 @@ class RNNTLoss(Loss):
 
 
 class RNNTLossMse(RNNTLoss):
-    def __init__(self, num_classes, reduction: str = 'mean_batch', loss_name: str = "default", loss_kwargs=None):
-        assert loss_name in {
-            "graph_mse",
-        }
-        super().__init__(num_classes, reduction=reduction, loss_name=loss_name, loss_kwargs=loss_kwargs)
+    def __init__(self, reduction: str = 'mean_batch', loss_name: str = "default", loss_kwargs=None):
+        assert loss_name == "graph_mse"
+        super().__init__(2, reduction=reduction, loss_name=loss_name, loss_kwargs=loss_kwargs)
 
     @property
     def input_types(self):
