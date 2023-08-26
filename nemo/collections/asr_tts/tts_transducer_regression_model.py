@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional, Union
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from omegaconf import DictConfig, ListConfig, open_dict
 from pytorch_lightning import Trainer
 from transformers import EncodecModel
@@ -29,8 +30,11 @@ from nemo.collections.asr.models import EncDecRNNTBPEModel, EncDecRNNTModel
 from nemo.collections.asr.modules import RNNTDecoder, RNNTJoint, rnnt
 from nemo.collections.asr.modules.audio_preprocessing import AudioPreprocessor
 from nemo.collections.asr.parts.mixins import ASRBPEMixin
-from nemo.collections.asr_tts.modules.rnnt.joint_regression import FactorizedRegressionJoint
-from nemo.collections.asr_tts.modules.rnnt.regression_decoder import TransducerRegressionDecoder
+from nemo.collections.asr_tts.modules.rnnt import (
+    FactorizedRegressionJoint,
+    GreedyBatchedFactorizedTransducerRegressionInfer,
+    TransducerRegressionDecoder,
+)
 from nemo.collections.common.tokenizers import TokenizerSpec
 from nemo.collections.tts.models import FastPitchModel
 from nemo.collections.tts.models.base import SpectrogramGenerator
@@ -80,6 +84,10 @@ class TextToSpeechTransducerRegressionModel(ModelPT, Exportable):
         assert isinstance(self.decoder, TransducerRegressionDecoder)
         assert isinstance(self.joint, FactorizedRegressionJoint)
 
+        self.infer = GreedyBatchedFactorizedTransducerRegressionInfer(
+            decoder_model=self.decoder, joint_model=self.joint, num_features=80,  # TODO: get from config
+        )
+
         # Setup RNNT Loss
         loss_name, loss_kwargs = EncDecRNNTModel.extract_rnnt_loss_cfg(self, self.cfg.get("loss", None))
 
@@ -88,15 +96,14 @@ class TextToSpeechTransducerRegressionModel(ModelPT, Exportable):
         )
         self.joint.loss = self.loss
 
-    # @property
-    # def input_types(self) -> Optional[Dict[str, NeuralType]]:
-    #     return {
-    #         "transcript": NeuralType(('B', 'T'), LabelsType()),
-    #         "transcript_len": NeuralType(tuple('B'), LengthsType()),
-    #         "speaker_ids": NeuralType(tuple('B'), LengthsType()),  # TODO: speaker type???
-    #     }
+    @property
+    def input_types(self) -> Optional[Dict[str, NeuralType]]:
+        return {
+            "transcripts": NeuralType(('B', 'T'), LabelsType()),
+            "transcripts_lengths": NeuralType(tuple('B'), LengthsType()),
+        }
 
-    # @typecheck()
+    @typecheck()
     def forward(self, transcripts: torch.Tensor, transcripts_lengths: torch.Tensor):
         encoded, _ = self.encoder(input=transcripts)
         return encoded, transcripts_lengths
@@ -163,6 +170,22 @@ class TextToSpeechTransducerRegressionModel(ModelPT, Exportable):
         if loss_value is not None:
             tensorboard_logs['val_loss'] = loss_value
 
+        hyps = self.infer.greedy_decode(
+            encoder_output=encoded_text, encoder_lengths=encoded_text_lengths, max_lengths=processed_signal_length
+        )
+        # TODO: fix speed
+        mse_loss = torch.zeros((), device=loss_value.device)
+        # logging.warning(f"{len(hyps), len(hyps[0])}")
+        for i, hyp in enumerate(hyps):
+            if len(hyp) == 0:
+                mse_loss += 100
+                continue
+            hyp = torch.stack(hyp).transpose(0, 1)
+            min_len = min(hyp.shape[1], processed_signal_length[i].item())
+            mse_loss += F.mse_loss(hyp[:, :min_len], processed_signal[i, :, :min_len], reduction="mean").item()
+        mse_loss /= len(hyps)
+        tensorboard_logs["mse_loss"] = mse_loss
+
         self.log('global_step', torch.tensor(self.trainer.global_step, dtype=torch.float32))
 
         return tensorboard_logs
@@ -171,7 +194,8 @@ class TextToSpeechTransducerRegressionModel(ModelPT, Exportable):
         self, outputs: List[Dict[str, torch.Tensor]], dataloader_idx: int = 0
     ) -> Optional[Dict[str, Dict[str, torch.Tensor]]]:
         val_loss_mean = torch.stack([x['val_loss'] for x in outputs]).mean()
-        val_loss_log = {'val_loss': val_loss_mean}
+        mse_loss_mean = torch.stack([x['mse_loss'] for x in outputs]).mean()
+        val_loss_log = {'val_loss': val_loss_mean, 'mse_loss': mse_loss_mean}
         tensorboard_logs = val_loss_log
         return {**val_loss_log, 'log': tensorboard_logs}
 

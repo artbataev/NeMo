@@ -41,14 +41,17 @@ class TransducerRegressionDecoder(RNNTDecoder):
         return decoded, target_length, states
 
     def predict(
-        self, targets: torch.Tensor, states: Optional[torch.Tensor] = None,
+        self, targets: torch.Tensor, states: Optional[torch.Tensor] = None, add_sos=True,
     ) -> Tuple[torch.Tensor, List[torch.Tensor]]:
         # logging.warning(f"{targets.shape}")
         device = targets.device
         dtype = targets.dtype
         batch_size = targets.shape[0]
         num_features = targets.shape[-1]
-        targets = torch.cat((torch.zeros((batch_size, 1, num_features), dtype=dtype, device=device), targets), dim=1)
+        if add_sos:
+            targets = torch.cat(
+                (torch.zeros((batch_size, 1, num_features), dtype=dtype, device=device), targets), dim=1
+            )
         # Forward step through RNN
         targets = targets.transpose(0, 1)  # (U + 1, B, H)
         # logging.warning(f"{targets.shape}")
