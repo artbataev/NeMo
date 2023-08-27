@@ -13,7 +13,7 @@ from nemo.utils import logging
 class BatchedHyps:
     def __init__(self, batch_size: int, init_length: int, num_features: int, device=None, float_dtype=None):
         self.y_sequence = torch.zeros((batch_size, init_length, num_features), device=device, dtype=float_dtype)
-        self.timestep = torch.empty((batch_size, init_length), device=device, dtype=torch.long)
+        self.timestep = torch.zeros((batch_size, init_length), device=device, dtype=torch.long)
         # self.scores = torch.zeros(batch_size, device=device, dtype=float_dtype)
         self.max_length = init_length
         self.num_features = num_features
@@ -21,8 +21,8 @@ class BatchedHyps:
 
     def _allocate_more(self):
         """Allocate twice"""
-        self.y_sequence = torch.cat((self.y_sequence, torch.empty_like(self.y_sequence)), dim=1)
-        self.timestep = torch.cat((self.timestep, torch.empty_like(self.timestep)), dim=1)
+        self.y_sequence = torch.cat((self.y_sequence, torch.zeros_like(self.y_sequence)), dim=1)
+        self.timestep = torch.cat((self.timestep, torch.zeros_like(self.timestep)), dim=1)
         self.max_length *= 2
 
     def add_results(self, active_indices, features, time_indices):
@@ -92,7 +92,7 @@ class GreedyBatchedFactorizedTransducerRegressionInfer(Typing):
             indices = torch.arange(batch_size, dtype=torch.long, device=device)
             active_indices = indices
 
-            while active_indices.shape[0] > 0 and max_decode_length < hypotheses.indices.max():
+            while active_indices.shape[0] > 0 and hypotheses.indices.max() < max_decode_length:
                 embeddings_selected = encoder_output[active_indices, time_indices[is_active]].unsqueeze(1)
                 decoder_output, current_hidden = self.decoder.predict(
                     last_predictions.unsqueeze(1), hidden, add_sos=False

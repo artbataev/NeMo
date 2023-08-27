@@ -183,11 +183,7 @@ class TextToSpeechTransducerRegressionModel(ModelPT, Exportable):
         if seq_len > results.shape[1]:
             results = F.pad(results, (0, 0, 0, seq_len - results.shape[1]), value=0.0)
         mask = torch.arange(seq_len, device=processed_signal.device)[None, :] < processed_signal_length[:, None]
-        mse_loss = (
-            (F.mse_loss(results, processed_signal).sum(dim=-1) * mask[..., None]).sum()
-            / mask.sum()
-            / processed_signal.shape[-1]
-        )
+        mse_loss = (F.mse_loss(results, processed_signal, reduction="none").mean(dim=-1) * mask).sum() / mask.sum()
 
         tensorboard_logs["mse_loss"] = mse_loss
 
