@@ -55,6 +55,6 @@ class TransducerRegressionDecoder(RNNTDecoder):
         # Forward step through RNN
         targets = targets.transpose(0, 1)  # (U + 1, B, H)
         # logging.warning(f"{targets.shape}")
-        g, states = self.prediction["dec_rnn"](self.proj(targets), states)
+        g, states = self.prediction["dec_rnn"](self.proj(targets).contiguous(), states)
         g = g.transpose(0, 1)  # (B, U + 1, H)
         return g, states

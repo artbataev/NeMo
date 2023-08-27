@@ -171,19 +171,24 @@ class TextToSpeechTransducerRegressionModel(ModelPT, Exportable):
             tensorboard_logs['val_loss'] = loss_value
 
         hyps = self.infer.greedy_decode(
-            encoder_output=encoded_text, encoder_lengths=encoded_text_lengths, max_lengths=processed_signal_length
+            encoder_output=encoded_text,
+            encoder_lengths=encoded_text_lengths,
+            max_decode_length=processed_signal_length.max(),
         )
-        # TODO: fix speed
-        mse_loss = torch.zeros((), device=loss_value.device)
-        # logging.warning(f"{len(hyps), len(hyps[0])}")
-        for i, hyp in enumerate(hyps):
-            if len(hyp) == 0:
-                mse_loss += 100
-                continue
-            hyp = torch.stack(hyp).transpose(0, 1)
-            min_len = min(hyp.shape[1], processed_signal_length[i].item())
-            mse_loss += F.mse_loss(hyp[:, :min_len], processed_signal[i, :, :min_len], reduction="mean").item()
-        mse_loss /= len(hyps)
+
+        # processed_signal: B, T, C
+        processed_signal = processed_signal.transpose(1, 2)
+        seq_len = processed_signal.shape[1]
+        results = hyps.y_sequence[:, :seq_len]
+        if seq_len > results.shape[1]:
+            results = F.pad(results, (0, 0, 0, seq_len - results.shape[1]), value=0.0)
+        mask = torch.arange(seq_len, device=processed_signal.device)[None, :] < processed_signal_length[:, None]
+        mse_loss = (
+            (F.mse_loss(results, processed_signal).sum(dim=-1) * mask[..., None]).sum()
+            / mask.sum()
+            / processed_signal.shape[-1]
+        )
+
         tensorboard_logs["mse_loss"] = mse_loss
 
         self.log('global_step', torch.tensor(self.trainer.global_step, dtype=torch.float32))
