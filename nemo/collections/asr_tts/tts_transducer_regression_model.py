@@ -64,8 +64,9 @@ class TextToSpeechTransducerRegressionModel(ModelPT, Exportable):
             vocabulary = self.tokenizer.tokenizer.get_vocab()
             vocabulary_size = len(vocabulary)
             if cfg.encoder["_target_"] == "nemo.collections.tts.modules.transformer.FFTransformerEncoder":
-                cfg.encoder["n_embed"] = vocabulary_size + 1
-                cfg.encoder["padding_idx"] = vocabulary_size  # TODO: is this correct?
+                with open_dict(cfg):
+                    cfg.encoder["n_embed"] = vocabulary_size + 1
+                    cfg.encoder["padding_idx"] = vocabulary_size  # TODO: is this correct?
         elif self.dataset_type == self.DatasetType.TTS:
             raise NotImplementedError("TTS dataset support is WIP")
         else:
