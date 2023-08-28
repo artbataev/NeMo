@@ -17,17 +17,12 @@ from typing import Any, Dict, List, Optional, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from omegaconf import DictConfig, ListConfig, open_dict
+from omegaconf import DictConfig, open_dict
 from pytorch_lightning import Trainer
-from transformers import EncodecModel
 
-from nemo.collections.asr.data import audio_to_text_dataset
 from nemo.collections.asr.data.audio_to_text import AudioTextBatchWithSpeakerId
-from nemo.collections.asr.data.audio_to_text_dali import AudioToBPEDALIDataset, DALIOutputs
 from nemo.collections.asr.losses.rnnt import RNNTLossMse
-from nemo.collections.asr.metrics.rnnt_wer import RNNTWER, RNNTDecoding
 from nemo.collections.asr.models import EncDecRNNTBPEModel, EncDecRNNTModel
-from nemo.collections.asr.modules import RNNTDecoder, RNNTJoint, rnnt
 from nemo.collections.asr.modules.audio_preprocessing import AudioPreprocessor
 from nemo.collections.asr.parts.mixins import ASRBPEMixin
 from nemo.collections.asr_tts.modules.rnnt import (
@@ -36,13 +31,9 @@ from nemo.collections.asr_tts.modules.rnnt import (
     TransducerRegressionDecoder,
 )
 from nemo.collections.common.tokenizers import TokenizerSpec
-from nemo.collections.tts.models import FastPitchModel
-from nemo.collections.tts.models.base import SpectrogramGenerator
 from nemo.core.classes import Exportable, ModelPT, typecheck
 from nemo.core.classes.common import PretrainedModelInfo, typecheck
-from nemo.core.classes.mixins import AccessMixin
 from nemo.core.neural_types import LabelsType, LengthsType, NeuralType
-from nemo.utils import logging
 from nemo.utils.enum import PrettyStrEnum
 
 
