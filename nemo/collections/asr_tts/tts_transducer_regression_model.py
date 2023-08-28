@@ -31,8 +31,7 @@ from nemo.collections.asr_tts.modules.rnnt import (
     TransducerRegressionDecoder,
 )
 from nemo.collections.common.tokenizers import TokenizerSpec
-from nemo.core.classes import Exportable, ModelPT, typecheck
-from nemo.core.classes.common import PretrainedModelInfo, typecheck
+from nemo.core.classes import Exportable, ModelPT, PretrainedModelInfo, typecheck
 from nemo.core.neural_types import LabelsType, LengthsType, NeuralType
 from nemo.utils.enum import PrettyStrEnum
 

@@ -495,6 +495,7 @@ class GraphRnntLoss(GraphTransducerLossBase):
 class GraphFactorizedTransducerMSELoss(GraphRnntLoss):
     def __init__(
         self,
+        mse_scale=1.0,
         clamp_prob=1e-20,
         use_grid_implementation=True,
         connect_composed=False,
@@ -509,6 +510,7 @@ class GraphFactorizedTransducerMSELoss(GraphRnntLoss):
             cast_to_float32=cast_to_float32,
         )
         self.clamp_prob = clamp_prob
+        self.mse_scale = mse_scale
 
     @property
     def input_types(self) -> Dict[str, NeuralType]:
@@ -537,7 +539,7 @@ class GraphFactorizedTransducerMSELoss(GraphRnntLoss):
             batch_size, enc_max_length, predict_max_length = blank_logits.shape
             num_features = targets.shape[-1]
             assert predictions.shape[1] == enc_max_length and predictions.shape[2] == predict_max_length
-            mse_loss_framewise = F.mse_loss(
+            mse_loss_framewise = self.mse_scale * F.mse_loss(
                 predictions,
                 torch.cat(
                     (
