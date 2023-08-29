@@ -133,8 +133,7 @@ class TextToSpeechTransducerRegressionModel(ModelPT, Exportable):
 
         return {'loss': loss_value}
 
-    def validation_pass(self, batch: AudioTextBatchWithSpeakerId, batch_idx, dataloader_idx=0):
-        # TODO: is it a good idea to have a separate validation_pass? See PTL 2.0 upgrade
+    def validation_step(self, batch: AudioTextBatchWithSpeakerId, batch_idx, dataloader_idx=0):
         encoded_text, encoded_text_lengths = self.forward(
             transcripts=batch.transcripts, transcripts_lengths=batch.transcripts_length
         )
@@ -145,7 +144,6 @@ class TextToSpeechTransducerRegressionModel(ModelPT, Exportable):
                 input_signal=batch.audio_signal, length=batch.audio_signal_length,
             )
 
-        # TODO: non-teacher-forcing mode
         decoded, target_len, states = self.decoder(
             targets=processed_signal.transpose(1, 2), target_length=processed_signal_length
         )
@@ -179,16 +177,14 @@ class TextToSpeechTransducerRegressionModel(ModelPT, Exportable):
 
         tensorboard_logs["mse_loss"] = mse_loss
 
-        self.log('global_step', torch.tensor(self.trainer.global_step, dtype=torch.float32))
+        self.log('global_step', torch.tensor(self.trainer.global_step, dtype=torch.float32))  # TODO: is it necessary?
 
-        return tensorboard_logs
-
-    def validation_step(self, batch, batch_idx, dataloader_idx=0):
-        tensorboard_logs = self.validation_pass(batch, batch_idx, dataloader_idx)
+        # need for PTL 2.0
         if isinstance(self.trainer.val_dataloaders, list) and len(self.trainer.val_dataloaders) > 1:
             self.validation_step_outputs[dataloader_idx].append(tensorboard_logs)
         else:
             self.validation_step_outputs.append(tensorboard_logs)
+
         return tensorboard_logs
 
     def multi_validation_epoch_end(
