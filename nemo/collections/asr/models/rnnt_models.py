@@ -31,7 +31,9 @@ from nemo.collections.asr.metrics.rnnt_wer import RNNTWER, RNNTDecoding, RNNTDec
 from nemo.collections.asr.models.asr_model import ASRModel, ExportableEncDecModel
 from nemo.collections.asr.modules.rnnt import RNNTDecoderJoint
 from nemo.collections.asr.parts.mixins import ASRModuleMixin
+from nemo.collections.asr.parts.preprocessing.features import normalize_batch
 from nemo.collections.asr.parts.utils.audio_utils import ChannelSelectorType
+from nemo.collections.tts.models import SpectrogramEnhancerModel
 from nemo.core.classes import Exportable
 from nemo.core.classes.common import PretrainedModelInfo, typecheck
 from nemo.core.classes.mixins import AccessMixin
@@ -52,6 +54,8 @@ class EncDecRNNTModel(ASRModel, ASRModuleMixin, ExportableEncDecModel):
         super().__init__(cfg=cfg, trainer=trainer)
 
         # Initialize components
+        self.preprocessor_normalize = self.cfg.preprocessor.get("normalize")
+        self.cfg.preprocessor["normalize"] = None
         self.preprocessor = EncDecRNNTModel.from_config_dict(self.cfg.preprocessor)
         self.encoder = EncDecRNNTModel.from_config_dict(self.cfg.encoder)
 
@@ -113,6 +117,22 @@ class EncDecRNNTModel(ASRModel, ASRModuleMixin, ExportableEncDecModel):
         ):
             self.joint.set_loss(self.loss)
             self.joint.set_wer(self.wer)
+
+        self.enhancer: Optional[SpectrogramEnhancerModel] = None
+        if self.cfg.get("enhancer") or self.cfg.get("enhancer_path"):
+            if cfg.get("enhancer") is not None:
+                self.register_nemo_submodule(
+                    "enhancer", config_field="enhancer", model=SpectrogramEnhancerModel(cfg.enhancer)
+                )
+            else:
+                self.register_nemo_submodule(
+                    "enhancer",
+                    config_field="enhancer",
+                    model=SpectrogramEnhancerModel.restore_from(
+                        f"{cfg.enhancer_path}", map_location=torch.device("cpu")
+                    ),
+                )
+            self.enhancer.freeze()  # tts model should be always frozen
 
         # Setup optimization normalization (if provided in config)
         self.setup_optim_normalization()
@@ -653,6 +673,11 @@ class EncDecRNNTModel(ASRModel, ASRModuleMixin, ExportableEncDecModel):
             processed_signal, processed_signal_length = self.preprocessor(
                 input_signal=input_signal, length=input_signal_length,
             )
+            if self.training and self.enhancer is not None:
+                if self.enhancer.training:
+                    self.enhancer.freeze()
+                processed_signal = self.enhancer(input_spectrograms=processed_signal, lengths=processed_signal_length)
+            spectrogram, *_ = normalize_batch(processed_signal, processed_signal_length, self.preprocessor_normalize)
 
         # Spec augment is not applied during evaluation/testing
         if self.spec_augmentation is not None and self.training:
