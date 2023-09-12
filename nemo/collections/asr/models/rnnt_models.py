@@ -24,6 +24,7 @@ from omegaconf import DictConfig, OmegaConf, open_dict
 from pytorch_lightning import Trainer
 from tqdm.auto import tqdm
 
+import nemo.collections.tts.models as tts_models
 from nemo.collections.asr.data import audio_to_text_dataset
 from nemo.collections.asr.data.audio_to_text_dali import AudioToCharDALIDataset, DALIOutputs
 from nemo.collections.asr.losses.rnnt import RNNTLoss, resolve_rnnt_default_loss_name
@@ -33,7 +34,6 @@ from nemo.collections.asr.modules.rnnt import RNNTDecoderJoint
 from nemo.collections.asr.parts.mixins import ASRModuleMixin
 from nemo.collections.asr.parts.preprocessing.features import normalize_batch
 from nemo.collections.asr.parts.utils.audio_utils import ChannelSelectorType
-from nemo.collections.tts.models import SpectrogramEnhancerModel
 from nemo.core.classes import Exportable
 from nemo.core.classes.common import PretrainedModelInfo, typecheck
 from nemo.core.classes.mixins import AccessMixin
@@ -118,17 +118,17 @@ class EncDecRNNTModel(ASRModel, ASRModuleMixin, ExportableEncDecModel):
             self.joint.set_loss(self.loss)
             self.joint.set_wer(self.wer)
 
-        self.enhancer: Optional[SpectrogramEnhancerModel] = None
+        self.enhancer: Optional[tts_models.SpectrogramEnhancerModel] = None
         if self.cfg.get("enhancer") or self.cfg.get("enhancer_path"):
             if cfg.get("enhancer") is not None:
                 self.register_nemo_submodule(
-                    "enhancer", config_field="enhancer", model=SpectrogramEnhancerModel(cfg.enhancer)
+                    "enhancer", config_field="enhancer", model=tts_models.SpectrogramEnhancerModel(cfg.enhancer)
                 )
             else:
                 self.register_nemo_submodule(
                     "enhancer",
                     config_field="enhancer",
-                    model=SpectrogramEnhancerModel.restore_from(
+                    model=tts_models.SpectrogramEnhancerModel.restore_from(
                         f"{cfg.enhancer_path}", map_location=torch.device("cpu")
                     ),
                 )
