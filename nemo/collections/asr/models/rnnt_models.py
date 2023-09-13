@@ -56,6 +56,7 @@ class EncDecRNNTModel(ASRModel, ASRModuleMixin, ExportableEncDecModel):
         # Initialize components
         self.preprocessor_normalize = self.cfg.preprocessor.get("normalize")
         self.cfg.preprocessor["normalize"] = None
+        self.norm_after_specaug = self.cfg.get("norm_after_specaug", False)
         self.preprocessor = EncDecRNNTModel.from_config_dict(self.cfg.preprocessor)
         self.encoder = EncDecRNNTModel.from_config_dict(self.cfg.encoder)
 
@@ -677,11 +678,17 @@ class EncDecRNNTModel(ASRModel, ASRModuleMixin, ExportableEncDecModel):
                 if self.enhancer.training:
                     self.enhancer.freeze()
                 processed_signal = self.enhancer(input_spectrograms=processed_signal, lengths=processed_signal_length)
-            spectrogram, *_ = normalize_batch(processed_signal, processed_signal_length, self.preprocessor_normalize)
+            if not self.norm_after_specaug:
+                spectrogram, *_ = normalize_batch(
+                    processed_signal, processed_signal_length, self.preprocessor_normalize
+                )
 
         # Spec augment is not applied during evaluation/testing
         if self.spec_augmentation is not None and self.training:
             processed_signal = self.spec_augmentation(input_spec=processed_signal, length=processed_signal_length)
+
+        if self.norm_after_specaug:
+            spectrogram, *_ = normalize_batch(processed_signal, processed_signal_length, self.preprocessor_normalize)
 
         encoded, encoded_len = self.encoder(audio_signal=processed_signal, length=processed_signal_length)
         return encoded, encoded_len
