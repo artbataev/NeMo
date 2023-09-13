@@ -858,6 +858,11 @@ class EncDecRNNTModel(ASRModel, ASRModuleMixin, ExportableEncDecModel):
 
         self.log('global_step', torch.tensor(self.trainer.global_step, dtype=torch.float32))
 
+        if isinstance(self.trainer.val_dataloaders, (list, tuple)) and len(self.trainer.val_dataloaders) > 1:
+            self.validation_step_outputs[dataloader_idx].append(tensorboard_logs)
+        else:
+            self.validation_step_outputs.append(tensorboard_logs)
+
         return tensorboard_logs
 
     def test_step(self, batch, batch_idx, dataloader_idx=0):
