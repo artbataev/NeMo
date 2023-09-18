@@ -16,7 +16,7 @@ import copy
 import json
 import os
 import tempfile
-from math import ceil, isclose
+from math import ceil
 from typing import Dict, List, Optional, Tuple, Union
 
 import torch
@@ -34,7 +34,6 @@ from nemo.collections.asr.modules.rnnt import RNNTDecoderJoint
 from nemo.collections.asr.parts.mixins import ASRModuleMixin
 from nemo.collections.asr.parts.preprocessing.features import normalize_batch
 from nemo.collections.asr.parts.utils.audio_utils import ChannelSelectorType
-from nemo.core.classes import Exportable
 from nemo.core.classes.common import PretrainedModelInfo, typecheck
 from nemo.core.classes.mixins import AccessMixin
 from nemo.core.neural_types import AcousticEncodedRepresentation, AudioSignal, LengthsType, NeuralType, SpectrogramType
@@ -804,7 +803,7 @@ class EncDecRNNTModel(ASRModel, ASRModuleMixin, ExportableEncDecModel):
         sample_id = sample_id.cpu().detach().numpy()
         return list(zip(sample_id, best_hyp_text))
 
-    def validation_step(self, batch, batch_idx, dataloader_idx=0):
+    def validation_pass(self, batch, batch_idx, dataloader_idx=0):
         signal, signal_len, transcript, transcript_len = batch
 
         # forward() only performs encoder forward
@@ -864,8 +863,11 @@ class EncDecRNNTModel(ASRModel, ASRModuleMixin, ExportableEncDecModel):
             tensorboard_logs['val_wer'] = wer
 
         self.log('global_step', torch.tensor(self.trainer.global_step, dtype=torch.float32))
+        return tensorboard_logs
 
-        if isinstance(self.trainer.val_dataloaders, (list, tuple)) and len(self.trainer.val_dataloaders) > 1:
+    def validation_step(self, batch, batch_idx, dataloader_idx=0):
+        tensorboard_logs = self.validation_pass(batch, batch_idx, dataloader_idx)
+        if isinstance(self.trainer.val_dataloaders, list) and len(self.trainer.val_dataloaders) > 1:
             self.validation_step_outputs[dataloader_idx].append(tensorboard_logs)
         else:
             self.validation_step_outputs.append(tensorboard_logs)
@@ -873,7 +875,7 @@ class EncDecRNNTModel(ASRModel, ASRModuleMixin, ExportableEncDecModel):
         return tensorboard_logs
 
     def test_step(self, batch, batch_idx, dataloader_idx=0):
-        logs = self.validation_step(batch, batch_idx, dataloader_idx=dataloader_idx)
+        logs = self.validation_pass(batch, batch_idx, dataloader_idx=dataloader_idx)
         test_logs = {
             'test_wer_num': logs['val_wer_num'],
             'test_wer_denom': logs['val_wer_denom'],
