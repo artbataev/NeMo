@@ -15,6 +15,7 @@
 import copy
 import json
 import os
+import random
 import tempfile
 from math import ceil
 from typing import Dict, List, Optional, Tuple, Union
@@ -119,6 +120,7 @@ class EncDecRNNTModel(ASRModel, ASRModuleMixin, ExportableEncDecModel):
             self.joint.set_wer(self.wer)
 
         self.enhancer: Optional[tts_models.SpectrogramEnhancerModel] = None
+        self.enhancer_prob = self.cfg.get("enhancer_prob", 0.0)
         if self.cfg.get("enhancer") or self.cfg.get("enhancer_path"):
             if cfg.get("enhancer") is not None:
                 self.register_nemo_submodule(
@@ -133,6 +135,7 @@ class EncDecRNNTModel(ASRModel, ASRModuleMixin, ExportableEncDecModel):
                     ),
                 )
             self.enhancer.freeze()  # tts model should be always frozen
+            logging.info(f"Initialized enhancer, enhancer prob {self.enhancer_prob}")
 
         # Setup optimization normalization (if provided in config)
         self.setup_optim_normalization()
@@ -673,8 +676,9 @@ class EncDecRNNTModel(ASRModel, ASRModuleMixin, ExportableEncDecModel):
             processed_signal, processed_signal_length = self.preprocessor(
                 input_signal=input_signal, length=input_signal_length,
             )
-            if self.training and self.enhancer is not None:
+            if self.training and self.enhancer is not None and random.random() < self.enhancer_prob:
                 if self.enhancer.training:
+                    logging.warning(f"Enhancer in training mode not expected")
                     self.enhancer.freeze()
                 processed_signal = self.enhancer(input_spectrograms=processed_signal, lengths=processed_signal_length)
             if not self.norm_after_specaug:
