@@ -6,7 +6,6 @@ import torch.nn.functional as F
 from nemo.collections.asr.modules.rnnt_abstract import AbstractRNNTJoint
 from nemo.collections.asr.parts.submodules.rnnt_greedy_decoding import GreedyBatchedRNNTInfer
 from nemo.collections.asr.parts.utils import rnnt_utils
-from nemo.collections.asr.parts.utils.rnnt_utils import BatchedHyps
 from nemo.collections.asr_tts.modules.rnnt.decoder_transformer import RNNTTransformerDecoder, TransformerDecoderState
 from nemo.utils import logging
 
