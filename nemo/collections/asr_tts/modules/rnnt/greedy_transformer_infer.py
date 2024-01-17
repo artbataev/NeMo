@@ -231,8 +231,5 @@ class GreedyBatchedTransformerRNNTInfer(GreedyBatchedRNNTInfer):
             input_ids=torch.narrow(labels, 1, 0, labels_lengths.max()), input_lengths=labels_lengths,
         )
         # take last elements for batch
-        last_labels = (output.transpose(1, 2)[torch.arange(output.shape[0]), labels_lengths].unsqueeze(1),)
-        return (
-            last_labels,
-            *additional_outputs,
-        )
+        last_labels = output.transpose(1, 2)[torch.arange(output.shape[0]), labels_lengths].unsqueeze(1)
+        return (last_labels, *additional_outputs)
