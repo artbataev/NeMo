@@ -227,11 +227,12 @@ class GreedyBatchedTransformerRNNTInfer(GreedyBatchedRNNTInfer):
     ) -> Tuple[torch.Tensor, List[torch.Tensor], torch.Tensor]:
         if labels.dtype != torch.long:
             labels = labels.long()
-        # TODO: memory
         output, *additional_outputs = self.decoder.predict(
             input_ids=torch.narrow(labels, 1, 0, labels_lengths.max()), input_lengths=labels_lengths,
         )
+        # take last elements for batch
+        last_labels = (output.transpose(1, 2)[torch.arange(output.shape[0]), labels_lengths].unsqueeze(1),)
         return (
-            output.transpose(1, 2)[torch.arange(output.shape[0]), labels_lengths].unsqueeze(1),
+            last_labels,
             *additional_outputs,
         )
