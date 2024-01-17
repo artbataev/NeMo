@@ -21,10 +21,10 @@ import numpy as np
 import torch
 from omegaconf import OmegaConf
 
+import nemo.collections.asr_tts.modules.rnnt as transformer_rnnt
 from nemo.collections.asr.parts.submodules import rnnt_beam_decoding, rnnt_greedy_decoding
 from nemo.collections.asr.parts.utils.asr_confidence_utils import ConfidenceConfig, ConfidenceMixin
 from nemo.collections.asr.parts.utils.rnnt_utils import Hypothesis, NBestHypotheses
-from nemo.collections.asr_tts.modules.rnnt.greedy_transformer_infer import GreedyBatchedTransformerRNNTInfer
 from nemo.collections.common.tokenizers.aggregate_tokenizer import AggregateTokenizer
 from nemo.collections.common.tokenizers.tokenizer_spec import TokenizerSpec
 from nemo.utils import logging
@@ -303,7 +303,7 @@ class AbstractRNNTDecoding(ConfidenceMixin):
                     confidence_method_cfg=self.confidence_method_cfg,
                 )
         elif self.cfg.strategy == 'greedy_batch_transformer':
-            self.decoding = GreedyBatchedTransformerRNNTInfer(
+            self.decoding = transformer_rnnt.GreedyBatchedTransformerRNNTInfer(
                 decoder_model=decoder,
                 joint_model=joint,
                 blank_index=self.blank_id,
