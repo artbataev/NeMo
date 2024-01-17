@@ -13,11 +13,12 @@
 # limitations under the License.
 
 import copy
+from typing import Optional
 
 import torch
 import torch.nn as nn
 
-from nemo.collections.common.parts import form_attention_mask
+from nemo.collections.common.parts import NEG_INF, form_attention_mask
 from nemo.collections.nlp.modules.common.transformer.transformer_modules import MultiHeadAttention, PositionWiseFF
 
 __all__ = ["TransformerEncoder"]
@@ -141,7 +142,14 @@ class TransformerEncoder(nn.Module):
             memory_states = encoder_states
         return memory_states
 
-    def forward(self, encoder_states, encoder_mask, encoder_mems_list=None, return_mems=False):
+    def forward(
+        self,
+        encoder_states,
+        encoder_mask,
+        encoder_mems_list=None,
+        return_mems=False,
+        memory_mask: Optional[torch.Tensor] = None,
+    ):
         """
         Args:
             encoder_states: output of the embedding_layer (B x L_enc x H)
@@ -151,9 +159,13 @@ class TransformerEncoder(nn.Module):
                 of encoder_states as keys and values if not None
             return_mems: bool, whether to return outputs of all encoder layers
                 or the last layer only
+            modified_mask: mask full sequence instead of last token when decoding with memory
         """
 
         encoder_attn_mask = form_attention_mask(encoder_mask, self.diag)
+        if memory_mask is not None:
+            memory_mask = (1 - memory_mask.to(torch.float)).unsqueeze(1).unsqueeze(1) * NEG_INF
+            encoder_attn_mask = torch.cat((memory_mask, encoder_attn_mask), dim=-1)
 
         memory_states = self._get_memory_states(encoder_states, encoder_mems_list, 0)
         cached_mems_list = [memory_states]

@@ -128,10 +128,12 @@ class TransformerEmbedding(nn.Module):
                 f"Input sequence is longer than maximum allowed sequence length for positional encoding. "
                 f"Got {seq_length} and {self.max_sequence_length}"
             )
-        position_ids = torch.arange(
-            start=start_pos, end=start_pos + seq_length, dtype=torch.long, device=input_ids.device
-        )
+        position_ids = torch.arange(start=0, end=seq_length, dtype=torch.long, device=input_ids.device)
         position_ids = position_ids.unsqueeze(0).repeat(input_ids.size(0), 1)
+        if isinstance(start_pos, torch.Tensor):
+            position_ids += start_pos.unsqueeze(1)
+        else:
+            position_ids += start_pos
 
         token_embeddings = self.token_embedding(input_ids)
         position_embeddings = self.position_embedding(position_ids)
