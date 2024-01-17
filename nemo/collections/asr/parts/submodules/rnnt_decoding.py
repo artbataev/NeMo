@@ -24,6 +24,7 @@ from omegaconf import OmegaConf
 from nemo.collections.asr.parts.submodules import rnnt_beam_decoding, rnnt_greedy_decoding
 from nemo.collections.asr.parts.utils.asr_confidence_utils import ConfidenceConfig, ConfidenceMixin
 from nemo.collections.asr.parts.utils.rnnt_utils import Hypothesis, NBestHypotheses
+from nemo.collections.asr_tts.modules.rnnt.greedy_transformer_infer import GreedyBatchedTransformerRNNTInfer
 from nemo.collections.common.tokenizers.aggregate_tokenizer import AggregateTokenizer
 from nemo.collections.common.tokenizers.tokenizer_spec import TokenizerSpec
 from nemo.utils import logging
@@ -224,7 +225,7 @@ class AbstractRNNTDecoding(ConfidenceMixin):
                     "currently only greedy and greedy_batch inference is supported for multi-blank models"
                 )
 
-        possible_strategies = ['greedy', 'greedy_batch', 'beam', 'tsd', 'alsd', 'maes']
+        possible_strategies = ['greedy', 'greedy_batch', 'greedy_batch_transformer', 'beam', 'tsd', 'alsd', 'maes']
         if self.cfg.strategy not in possible_strategies:
             raise ValueError(f"Decoding strategy must be one of {possible_strategies}")
 
@@ -301,7 +302,17 @@ class AbstractRNNTDecoding(ConfidenceMixin):
                     preserve_frame_confidence=self.preserve_frame_confidence,
                     confidence_method_cfg=self.confidence_method_cfg,
                 )
-
+        elif self.cfg.strategy == 'greedy_batch_transformer':
+            self.decoding = GreedyBatchedTransformerRNNTInfer(
+                decoder_model=decoder,
+                joint_model=joint,
+                blank_index=self.blank_id,
+                max_symbols_per_step=(
+                    self.cfg.greedy.get('max_symbols', None) or self.cfg.greedy.get('max_symbols_per_step', None)
+                ),
+                stateful_decoding=self.cfg.greedy.get('stateful_decoding', True),
+                use_sampling=self.cfg.greedy.get('use_sampling', False),
+            )
         elif self.cfg.strategy == 'greedy_batch':
             if self.big_blank_durations is None:
                 if self.durations is None:
