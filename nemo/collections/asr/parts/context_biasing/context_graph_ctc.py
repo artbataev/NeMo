@@ -188,16 +188,22 @@ class ContextGraphCTC:
         default_node_attr = {
             "shape": "circle",
             "style": "bold",
-            "fontsize": "14",
+            "fontsize": "12",
         }
 
         final_state_attr = {
             "shape": "doublecircle",
             "style": "bold",
-            "fontsize": "14",
+            "fontsize": "12",
+        }
+        
+        default_edge_attr = {
+            "fontsize": "17",
         }
 
         dot = graphviz.Digraph(name="Context Graph", graph_attr=graph_attr)
+
+        blank_label_print = "⊘"
 
         seen = set()
         queue = deque()
@@ -221,14 +227,18 @@ class ContextGraphCTC:
                 if node.index != current_node.index:
                     output, input, arc = str(current_node.index), str(node.index), f"{label}"
                     if (output, input, arc) not in printed_arcs:
-                        dot.edge(output, input, label=arc)
+                        if arc == self.blank_token:
+                            dot.edge(output, input, label=blank_label_print, color="blue", **default_edge_attr)
+                        else:
+                            dot.edge(output, input, label=arc)
                         queue.append(node)
                 else:
                     output, input, arc = str(current_node.index), str(current_node.index), f"{label}"
                     if (output, input, arc) not in printed_arcs:
-                        dot.edge(
-                            output, input, label=arc, color="green",
-                        )
+                        if arc == self.blank_token:
+                            dot.edge(output, input, label=blank_label_print, color="blue", **default_edge_attr)
+                        else:
+                            dot.edge(output, input, label=arc, color="green")
                 printed_arcs.add((output, input, arc))
 
         return dot
