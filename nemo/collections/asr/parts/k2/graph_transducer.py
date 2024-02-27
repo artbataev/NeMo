@@ -14,7 +14,8 @@
 
 import abc
 from contextlib import nullcontext
-from typing import ContextManager
+from typing import ContextManager, Tuple, Union
+
 import torch
 import torch.nn.functional as F
 
@@ -172,8 +173,28 @@ class GraphTransducerLossBase(Loss):
                 k2.create_fsa_vec(text_fsas), k2.create_fsa_vec(temporal_fsas), treat_epsilons_specially=False
             )
             if self.connect_composed:
-                k2.connect(target_fsas_vec)
+                target_fsas_vec = k2.connect(target_fsas_vec)
         return target_fsas_vec
+
+    def get_batch_indices(self, target_fsas_vec: k2.Fsa) -> torch.Tensor:
+        """
+        Get indices of flatten logits for each arc in the lattices.
+
+        Args:
+            target_fsas_vec: batch of target FSAs with lattices
+
+        Returns:
+            1d tensor with indices
+        """
+        batch_size = target_fsas_vec.shape[0]
+        device = target_fsas_vec.device
+        scores_to_batch_i = torch.repeat_interleave(
+            torch.arange(batch_size, device=device, dtype=torch.int64),
+            torch.tensor(
+                [target_fsas_vec.arcs.index(0, i)[0].values().shape[0] for i in range(batch_size)], device=device,
+            ),
+        )
+        return scores_to_batch_i
 
     def get_logits_indices(self, target_fsas_vec: k2.Fsa, logits_shape: torch.Size) -> torch.Tensor:
         """
@@ -187,14 +208,7 @@ class GraphTransducerLossBase(Loss):
             1d tensor with indices
         """
         # logits_shape: B x Time x Text+1 x Labels
-        batch_size = logits_shape[0]
-        device = target_fsas_vec.device
-        scores_to_batch_i = torch.repeat_interleave(
-            torch.arange(batch_size, device=device, dtype=torch.int64),
-            torch.tensor(
-                [target_fsas_vec.arcs.index(0, i)[0].values().shape[0] for i in range(batch_size)], device=device,
-            ),
-        )
+        scores_to_batch_i = self.get_batch_indices(target_fsas_vec=target_fsas_vec)
         indices = (
             scores_to_batch_i * logits_shape[1] * logits_shape[2] * logits_shape[3]  # Batch
             + target_fsas_vec.aux_labels.to(torch.int64) * logits_shape[2] * logits_shape[3]  # Time indices
@@ -218,6 +232,7 @@ class GraphRnntLoss(GraphTransducerLossBase):
         connect_composed=False,
         double_scores=False,
         cast_to_float32=False,
+        return_graph=False,
     ):
         """
         Init method
@@ -230,6 +245,7 @@ class GraphRnntLoss(GraphTransducerLossBase):
             double_scores: Use calculation of loss in double precision (float64) in the lattice.
                 Does not significantly affect memory usage since the lattice is ~V/2 times smaller than the joint tensor.
             cast_to_float32: Force cast joint tensor to float32 before log-softmax calculation.
+            return_graph: Return graph (along with loss) from `forward` function
         """
         super().__init__(
             use_grid_implementation=use_grid_implementation,
@@ -238,6 +254,7 @@ class GraphRnntLoss(GraphTransducerLossBase):
             cast_to_float32=cast_to_float32,
         )
         self.blank = blank
+        self.return_graph = return_graph
 
     def get_unit_schema(self, units_tensor: torch.Tensor, vocab_size: int) -> "k2.Fsa":
         """
@@ -443,7 +460,7 @@ class GraphRnntLoss(GraphTransducerLossBase):
 
     def forward(
         self, acts: torch.Tensor, labels: torch.Tensor, act_lens: torch.Tensor, label_lens: torch.Tensor,
-    ) -> torch.Tensor:
+    ) -> Union[torch.Tensor, Tuple[torch.Tensor, "k2.Fsa"]]:
         """
         Compute forward method for RNN-T.
 
@@ -480,4 +497,6 @@ class GraphRnntLoss(GraphTransducerLossBase):
 
             target_fsas_vec.scores = scores
             scores = -1 * target_fsas_vec.get_tot_scores(use_double_scores=self.double_scores, log_semiring=True)
+            if self.return_graph:
+                return scores, target_fsas_vec
             return scores
