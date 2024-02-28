@@ -1,22 +1,19 @@
 import random
 
-import numpy as np
 import pytest
 import torch
 
 from nemo.collections.asr.losses.rnnt import TDTLossPytorch
 from nemo.collections.asr.parts.k2.tdt_transducer import GraphTDTTransducerLoss
-from nemo.collections.asr.parts.numba.rnnt_loss.rnnt_pytorch import TDTLossNumba
 
 
 class TestGraphTDT:
     @pytest.mark.unit
-    def test_loss_random(self):
-        # numba_utils.skip_numba_cuda_test_if_unsupported(__NUMBA_MINIMUM_VERSION__)
+    @pytest.mark.parametrize("sigma", [0.0, 0.2])
+    def test_loss_random(self, sigma):
         device = torch.device("cuda:0")
         batch_size, max_time, U, V = 4, 8, 4, 8  # here V is number of non blank labels
         durations = [0, 1, 2, 4]
-        sigma = 0.00
 
         encoder_lengths = torch.full([batch_size], fill_value=max_time, device=device, dtype=torch.long)
         label_lengths = torch.full([batch_size], fill_value=U - 1, device=device, dtype=torch.long)
