@@ -59,6 +59,7 @@ except (ImportError, ModuleNotFoundError):
 
 try:
     from nemo.collections.asr.parts.k2.graph_transducer import GraphRnntLoss
+    from nemo.collections.asr.parts.k2.tdt_transducer import GraphTDTTransducerLoss
     from nemo.collections.asr.parts.k2.w_transducer import GraphWTransducerLoss
 
     K2_AVAILABLE = True
@@ -152,6 +153,13 @@ RNNT_LOSS_RESOLVER = {
         min_version='0.0',
         is_available=True,
         installation_msg="Pure Pytorch implementation of TDT loss. Slow and for debugging purposes only.",
+    ),
+    "graph_tdt": RNNTLossConfig(
+        loss_name="graph_tdt",
+        lib_name="k2",
+        is_available=K2_AVAILABLE,
+        installation_msg=K2_INSTALLATION_MESSAGE,
+        force_float32=False,
     ),
 }
 
@@ -315,6 +323,10 @@ def resolve_rnnt_loss(loss_name: str, blank_idx: int, loss_kwargs: dict = None) 
         sigma = loss_kwargs.pop('sigma', 0.0)
         loss_func = TDTLossPytorch(blank=blank_idx, durations=durations, reduction='none', sigma=sigma)
         _warn_unused_additional_kwargs(loss_name, loss_kwargs)
+
+    elif loss_name == "graph_tdt":
+        loss_kwargs = _clean_kwargs(loss_name, loss_kwargs, GraphTDTTransducerLoss.__init__, ignore_params={"blank"})
+        loss_func = GraphTDTTransducerLoss(blank=blank_idx, **loss_kwargs)
 
     elif loss_name == "graph_rnnt":
         loss_kwargs = _clean_kwargs(loss_name, loss_kwargs, GraphRnntLoss.__init__, ignore_params={"blank"})

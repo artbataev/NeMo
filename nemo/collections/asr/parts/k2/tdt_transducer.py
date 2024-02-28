@@ -71,6 +71,7 @@ class GraphTDTTransducerLoss(GraphRnntLoss):
         self.durations = durations
         assert durations[0] == 0
         assert durations[1] == 1
+        self.reduction = None  # for compatibility, do not need reduction in NeMo
 
     """
     Graph-TDT Transducer loss
