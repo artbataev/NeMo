@@ -27,6 +27,7 @@ class GraphTDTTransducerLoss(GraphRnntLoss):
         self,
         blank: int,
         durations: list[int],
+        fastemit_lambda: float = 0.0,
         clamp: float = -1,
         sigma: float = 0.0,
         omega: float = 0.0,
@@ -58,10 +59,15 @@ class GraphTDTTransducerLoss(GraphRnntLoss):
             cast_to_float32=cast_to_float32,
             return_graph=return_graph,
         )
-        if clamp > 0.0:
-            raise NotImplementedError
         self.sigma = sigma
         self.omega = omega
+        self.fastemit_lambda = fastemit_lambda
+        if clamp > 0.0:
+            raise NotImplementedError
+        if self.omega != 0.0:
+            raise NotImplementedError
+        if self.fastemit_lambda:
+            raise NotImplementedError
         self.durations = durations
         assert durations[0] == 0
         assert durations[1] == 1
@@ -211,4 +217,39 @@ class GraphTDTTransducerLoss(GraphRnntLoss):
     def forward(
         self, acts: torch.Tensor, labels: torch.Tensor, act_lens: torch.Tensor, label_lens: torch.Tensor,
     ):
-        raise NotImplementedError
+        # argument names are consistent with NeMo, see RNNTLoss.forward:
+        # self._loss(acts=log_probs, labels=targets, act_lens=input_lengths, label_lens=target_lengths)
+        logits, targets, logits_lengths, target_lengths = acts, labels, act_lens, label_lens
+
+        # logits: B x Time x Text+1 x C
+        vocab_size = logits.shape[-1]
+        target_fsas_vec = self.get_graphs_batched(logits_lengths, targets, target_lengths, vocab_size)
+
+        cast_context = force_float32_context() if self.cast_to_float32 else nullcontext()
+        with cast_context:
+            num_durations = len(self.durations)
+            log_probs = F.log_softmax(logits[:-num_durations], dim=-1) - self.sigma
+            log_probs_durations = F.log_softmax(logits[-num_durations:], dim=-1)
+            with torch.no_grad():
+                # following the approach from https://github.com/artbataev/uol_final
+                last_transition_mask = target_fsas_vec.labels == -1
+                batch_indices = self.get_batch_indices(target_fsas_vec)
+                time_indices = target_fsas_vec.aux_labels.clone().to(torch.long)
+                unit_indices = target_fsas_vec.unit_positions.clone().to(torch.long)
+                text_units = target_fsas_vec.labels.clone().to(torch.long)
+                duration_indices = target_fsas_vec.durations.clone().to(torch.long)
+                text_units.masked_fill_(last_transition_mask, 0)
+
+            # NB: do not assign scores -> modify, k2 will not update all scores correctly (modify -> assign)
+            scores = (
+                log_probs[batch_indices, time_indices, unit_indices, text_units]
+                + log_probs_durations[batch_indices, time_indices, unit_indices, duration_indices]
+            )
+            # fix weights for the arcs to the last state
+            scores[last_transition_mask] = 0
+
+            target_fsas_vec.scores = scores
+            scores = -1 * target_fsas_vec.get_tot_scores(use_double_scores=self.double_scores, log_semiring=True)
+            if self.return_graph:
+                return scores, target_fsas_vec
+            return scores
