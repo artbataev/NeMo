@@ -221,13 +221,13 @@ class GraphTDTTransducerLoss(GraphRnntLoss):
         # self._loss(acts=log_probs, labels=targets, act_lens=input_lengths, label_lens=target_lengths)
         logits, targets, logits_lengths, target_lengths = acts, labels, act_lens, label_lens
 
+        num_durations = len(self.durations)
         # logits: B x Time x Text+1 x C
-        vocab_size = logits.shape[-1]
+        vocab_size = logits.shape[-1] - num_durations
         target_fsas_vec = self.get_graphs_batched(logits_lengths, targets, target_lengths, vocab_size)
 
         cast_context = force_float32_context() if self.cast_to_float32 else nullcontext()
         with cast_context:
-            num_durations = len(self.durations)
             log_probs = F.log_softmax(logits[..., :-num_durations], dim=-1) - self.sigma
             log_probs_durations = F.log_softmax(logits[..., -num_durations:], dim=-1)
             with torch.no_grad():
