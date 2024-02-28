@@ -228,8 +228,8 @@ class GraphTDTTransducerLoss(GraphRnntLoss):
         cast_context = force_float32_context() if self.cast_to_float32 else nullcontext()
         with cast_context:
             num_durations = len(self.durations)
-            log_probs = F.log_softmax(logits[:-num_durations], dim=-1) - self.sigma
-            log_probs_durations = F.log_softmax(logits[-num_durations:], dim=-1)
+            log_probs = F.log_softmax(logits[..., :-num_durations], dim=-1) - self.sigma
+            log_probs_durations = F.log_softmax(logits[..., -num_durations:], dim=-1)
             with torch.no_grad():
                 # following the approach from https://github.com/artbataev/uol_final
                 last_transition_mask = target_fsas_vec.labels == -1
