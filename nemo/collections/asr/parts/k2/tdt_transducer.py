@@ -187,7 +187,7 @@ class GraphTDTTransducerLoss(GraphRnntLoss):
             # arcs[cur_last : cur_last + 1, 2] = units_tensor[-1]
             # arc_durations[cur_last : cur_last + 1] = duration_i
             # cur_last += 1
-            # duration_i += 1
+            duration_i += 1
 
         arcs = arcs[: cur_last + 2]
         arc_durations = arc_durations[: cur_last + 2]
