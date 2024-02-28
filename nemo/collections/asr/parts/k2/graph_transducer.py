@@ -383,13 +383,14 @@ class GraphRnntLoss(GraphTransducerLossBase):
         anti_diag = m + n - 1 - diag
         max_idx = n * m - 1
         cur_diag_idx = i if m > n else m - j - 1
-        states = (
+        new_states = (
             diag.lt(min_mn) * ((diag * (diag + 1) >> 1) + i)
             + torch.logical_and(diag.ge(min_mn), diag.lt(max_mn))
             * ((min_mn * (min_mn + 1) >> 1) + (diag - min_mn) * min_mn + cur_diag_idx)
             + diag.ge(max_mn) * (max_idx - (anti_diag * (anti_diag + 1) >> 1) + m - j)
         )
-        return states
+        new_states.masked_fill_(states >= n * m, states)
+        return new_states
 
     def get_grid(self, units_tensor: torch.Tensor, num_frames: int, vocab_size: int) -> "k2.Fsa":
         """
