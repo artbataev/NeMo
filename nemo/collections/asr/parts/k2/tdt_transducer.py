@@ -154,7 +154,9 @@ class GraphTDTTransducerLoss(GraphRnntLoss):
         arc_durations[cur_last : cur_last + num_text_arcs_rnnt] = 0
         cur_last += num_text_arcs_rnnt
 
-        for cur_duration in self.durations[100:]:
+        for cur_duration in self.durations[1:]:
+            if cur_duration > num_frames:
+                break
             num_extra = text_length * (num_frames - cur_duration)
             from_states = (
                 torch.arange(num_grid_states, dtype=torch.int32, device=device)
@@ -169,7 +171,12 @@ class GraphTDTTransducerLoss(GraphRnntLoss):
             arcs[cur_last : cur_last + num_extra, 2] = ilabels
             arc_durations[cur_last : cur_last + num_extra] = cur_duration
             cur_last += num_extra
-            # TODO: extra to last
+            # if cur_duration >= 1:
+            arcs[cur_last : cur_last + 1, 0] = num_grid_states - 2 - (cur_duration - 1) * (text_length + 1)
+            arcs[cur_last : cur_last + 1, 1] = num_grid_states
+            arcs[cur_last : cur_last + 1, 2] = units_tensor[-1]
+            arc_durations[cur_last : cur_last + 1] = cur_duration
+            cur_last += 1
 
         arcs = arcs[: cur_last + 2]
         arc_durations = arc_durations[: cur_last + 2]
