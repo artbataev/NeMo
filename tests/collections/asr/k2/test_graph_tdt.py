@@ -86,7 +86,7 @@ class TestGraphTDT:
         etalon_time = time.perf_counter_ns()
         etalon_loss_value = tdt_numba(acts=logits, act_lens=encoder_lengths, labels=labels, label_lens=label_lengths)
         etalon_loss_value.sum().backward()
-        etalon_time -= time.perf_counter_ns()
+        etalon_time = time.perf_counter_ns() - etalon_time
         logging.warning(f"Etalon, sec: {etalon_time / 1e9:.6f}")
 
         for _ in range(3):
@@ -98,7 +98,7 @@ class TestGraphTDT:
         graph_time = time.perf_counter_ns()
         graph_loss_value = tdt_graph(acts=logits2, act_lens=encoder_lengths, labels=labels, label_lens=label_lengths)
         graph_loss_value.sum().backward()
-        graph_time -= time.perf_counter_ns()
+        graph_time = time.perf_counter_ns() - graph_time
         logging.warning(f"Graph, sec: {graph_time / 1e9:.6f}")
 
         assert torch.allclose(etalon_loss_value, graph_loss_value, rtol=1e-4, atol=1e-4)
