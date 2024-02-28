@@ -124,6 +124,7 @@ class GraphTDTTransducerLoss(GraphRnntLoss):
         # arcs[:num_forward_arcs_rnnt, 2] = blank_id
         # durations[:num_forward_arcs_rnnt] = 1
         # cur_last += num_forward_arcs_rnnt
+        duration_i = 1
         for cur_duration in self.durations[1:]:
             if cur_duration > num_frames:
                 break
@@ -137,14 +138,15 @@ class GraphTDTTransducerLoss(GraphRnntLoss):
             arcs[cur_last : cur_last + num_extra, 0] = from_states
             arcs[cur_last : cur_last + num_extra, 1] = to_states
             arcs[cur_last : cur_last + num_extra, 2] = blank_id
-            arc_durations[cur_last : cur_last + num_extra] = cur_duration
+            arc_durations[cur_last : cur_last + num_extra] = duration_i
             cur_last += num_extra
             if cur_duration > 1:
                 arcs[cur_last : cur_last + 1, 0] = num_grid_states - 1 - (cur_duration - 1) * (text_length + 1)
                 arcs[cur_last : cur_last + 1, 1] = num_grid_states
                 arcs[cur_last : cur_last + 1, 2] = blank_id
-                arc_durations[cur_last : cur_last + 1] = cur_duration
+                arc_durations[cur_last : cur_last + 1] = duration_i
                 cur_last += 1
+            duration_i += 1
 
         # text arcs
         from_states = (
@@ -160,6 +162,7 @@ class GraphTDTTransducerLoss(GraphRnntLoss):
         arc_durations[cur_last : cur_last + num_text_arcs_rnnt] = 0
         cur_last += num_text_arcs_rnnt
 
+        duration_i = 1
         for cur_duration in self.durations[1:]:
             if cur_duration > num_frames:
                 break
@@ -175,14 +178,16 @@ class GraphTDTTransducerLoss(GraphRnntLoss):
             arcs[cur_last : cur_last + num_extra, 0] = from_states
             arcs[cur_last : cur_last + num_extra, 1] = to_states
             arcs[cur_last : cur_last + num_extra, 2] = ilabels
-            arc_durations[cur_last : cur_last + num_extra] = cur_duration
+            arc_durations[cur_last : cur_last + num_extra] = duration_i
             cur_last += num_extra
+            # TODO: should these arcs contribute or not?
             # if cur_duration >= 1:
-            arcs[cur_last : cur_last + 1, 0] = num_grid_states - 2 - (cur_duration - 1) * (text_length + 1)
-            arcs[cur_last : cur_last + 1, 1] = num_grid_states
-            arcs[cur_last : cur_last + 1, 2] = units_tensor[-1]
-            arc_durations[cur_last : cur_last + 1] = cur_duration
-            cur_last += 1
+            # arcs[cur_last : cur_last + 1, 0] = num_grid_states - 2 - (cur_duration - 1) * (text_length + 1)
+            # arcs[cur_last : cur_last + 1, 1] = num_grid_states
+            # arcs[cur_last : cur_last + 1, 2] = units_tensor[-1]
+            # arc_durations[cur_last : cur_last + 1] = duration_i
+            # cur_last += 1
+            # duration_i += 1
 
         arcs = arcs[: cur_last + 2]
         arc_durations = arc_durations[: cur_last + 2]
