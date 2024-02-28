@@ -93,6 +93,7 @@ class GraphTDTTransducerLoss(GraphRnntLoss):
         blank_id = self.blank
         text_length = units_tensor.shape[0]
         device = units_tensor.device
+        # all_durations = torch.tensor(list(self.durations), device=device, dtype=torch.long)
         num_grid_states = num_frames * (text_length + 1)
         num_forward_arcs_rnnt = (num_frames - 1) * (text_length + 1)
         num_text_arcs_rnnt = text_length * num_frames
@@ -102,7 +103,7 @@ class GraphTDTTransducerLoss(GraphRnntLoss):
             dtype=torch.int32,
             device=device,
         )
-        durations = torch.zeros_like(arcs[:, 0])
+        arc_durations = torch.zeros_like(arcs[:, 0])
         # blank transitions
         # i, i+<text_len + 1>, 0 <blank>, i / <text_len+1>, i % <text_len + 1>
         # from_states = (
@@ -118,6 +119,8 @@ class GraphTDTTransducerLoss(GraphRnntLoss):
         # durations[:num_forward_arcs_rnnt] = 1
         # cur_last += num_forward_arcs_rnnt
         for cur_duration in self.durations[1:]:
+            if cur_duration > num_frames:
+                break
             num_extra = (num_frames - cur_duration) * (text_length + 1)
             from_states = (
                 torch.arange(num_grid_states, dtype=torch.int32, device=device)
@@ -128,9 +131,14 @@ class GraphTDTTransducerLoss(GraphRnntLoss):
             arcs[cur_last : cur_last + num_extra, 0] = from_states
             arcs[cur_last : cur_last + num_extra, 1] = to_states
             arcs[cur_last : cur_last + num_extra, 2] = blank_id
-            durations[cur_last : cur_last + num_extra] = cur_duration
+            arc_durations[cur_last : cur_last + num_extra] = cur_duration
             cur_last += num_extra
-            # TODO: extra to last
+            if cur_duration > 1:
+                arcs[cur_last : cur_last + 1, 0] = num_grid_states - 1 - (cur_duration - 1) * (text_length + 1)
+                arcs[cur_last : cur_last + 1, 1] = num_grid_states
+                arcs[cur_last : cur_last + 1, 2] = blank_id
+                arc_durations[cur_last : cur_last + 1] = cur_duration
+                cur_last += 1
 
         # text arcs
         from_states = (
@@ -143,10 +151,10 @@ class GraphTDTTransducerLoss(GraphRnntLoss):
         arcs[cur_last : cur_last + num_text_arcs_rnnt, 0] = from_states
         arcs[cur_last : cur_last + num_text_arcs_rnnt, 1] = to_states
         arcs[cur_last : cur_last + num_text_arcs_rnnt, 2] = ilabels
-        durations[cur_last : cur_last + num_text_arcs_rnnt] = 0
+        arc_durations[cur_last : cur_last + num_text_arcs_rnnt] = 0
         cur_last += num_text_arcs_rnnt
 
-        for cur_duration in self.durations[1:]:
+        for cur_duration in self.durations[100:]:
             num_extra = text_length * (num_frames - cur_duration)
             from_states = (
                 torch.arange(num_grid_states, dtype=torch.int32, device=device)
@@ -159,12 +167,12 @@ class GraphTDTTransducerLoss(GraphRnntLoss):
             arcs[cur_last : cur_last + num_extra, 0] = from_states
             arcs[cur_last : cur_last + num_extra, 1] = to_states
             arcs[cur_last : cur_last + num_extra, 2] = ilabels
-            durations[cur_last : cur_last + num_extra] = cur_duration
+            arc_durations[cur_last : cur_last + num_extra] = cur_duration
             cur_last += num_extra
             # TODO: extra to last
 
         arcs = arcs[: cur_last + 2]
-        durations = durations[: cur_last + 2]
+        arc_durations = arc_durations[: cur_last + 2]
         # last 2 states
         arcs[-2, :3] = torch.tensor((num_grid_states - 1, num_grid_states, blank_id), dtype=torch.int32, device=device)
         arcs[-1, :3] = torch.tensor((num_grid_states, num_grid_states + 1, -1), dtype=torch.int32, device=device)
@@ -187,7 +195,7 @@ class GraphTDTTransducerLoss(GraphRnntLoss):
         indices = torch.argsort(arcs[:, 0], dim=0)
         rnnt_graph = k2.Fsa(arcs[indices], aux_labels=frame_indices[indices])
         rnnt_graph.unit_positions = unit_positions[indices]
-        rnnt_graph.durations = durations[indices]
+        rnnt_graph.durations = arc_durations[indices]
         return rnnt_graph
 
     def forward(
