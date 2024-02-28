@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import logging
 from contextlib import nullcontext
 from typing import Union
 
@@ -62,12 +62,11 @@ class GraphTDTTransducerLoss(GraphRnntLoss):
         self.sigma = sigma
         self.omega = omega
         self.fastemit_lambda = fastemit_lambda
-        if clamp > 0.0:
-            raise NotImplementedError
+        self.clamp = max(clamp, 0.0)
         if self.omega != 0.0:
-            raise NotImplementedError
+            raise NotImplementedError("omega is not implemented for Graph-TDT")
         if self.fastemit_lambda:
-            raise NotImplementedError
+            raise NotImplementedError("FastEmit is not implemented for Graph-TDT")
         self.durations = durations
         assert durations[0] == 0
         assert durations[1] == 1
@@ -232,6 +231,9 @@ class GraphTDTTransducerLoss(GraphRnntLoss):
         vocab_size = logits.shape[-1] - num_durations
         target_fsas_vec = self.get_graphs_batched(logits_lengths, targets, target_lengths, vocab_size)
 
+        if self.clamp > 0.0:
+            logits.register_hook(lambda grad: grad.clamp_(min=-self.clamp, max=self.clamp))
+
         cast_context = force_float32_context() if self.cast_to_float32 else nullcontext()
         with cast_context:
             log_probs = F.log_softmax(logits[..., :-num_durations], dim=-1) - self.sigma
@@ -256,6 +258,7 @@ class GraphTDTTransducerLoss(GraphRnntLoss):
 
             target_fsas_vec.scores = scores
             scores = -1 * target_fsas_vec.get_tot_scores(use_double_scores=self.double_scores, log_semiring=True)
+
             if self.return_graph:
                 return scores, target_fsas_vec
             return scores
