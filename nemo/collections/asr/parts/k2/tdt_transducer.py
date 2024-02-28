@@ -174,7 +174,10 @@ class GraphTDTTransducerLoss(GraphRnntLoss):
         arcs = arcs[: cur_last + 2]
         arc_durations = arc_durations[: cur_last + 2]
         # last 2 states
+        # last blank
         arcs[-2, :3] = torch.tensor((num_grid_states - 1, num_grid_states, blank_id), dtype=torch.int32, device=device)
+        arc_durations[-2] = 1
+        # transition to final state - special for k2
         arcs[-1, :3] = torch.tensor((num_grid_states, num_grid_states + 1, -1), dtype=torch.int32, device=device)
 
         # sequence indices, time indices
