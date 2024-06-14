@@ -228,7 +228,7 @@ class EncDecRNNTModel(ASRModel, ASRModuleMixin, ExportableEncDecModel, ASRTransc
     def set_decoding_type_according_to_loss(self, decoding_cfg):
         loss_name, loss_kwargs = self.extract_rnnt_loss_cfg(self.cfg.get("loss", None))
 
-        if loss_name == 'tdt':
+        if loss_name in {'tdt', 'graph_tdt'}:
             decoding_cfg.durations = loss_kwargs.durations
         elif loss_name == 'multiblank_rnnt':
             decoding_cfg.big_blank_durations = loss_kwargs.big_blank_durations
