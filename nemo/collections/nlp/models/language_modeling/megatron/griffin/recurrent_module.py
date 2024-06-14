@@ -18,7 +18,10 @@ from typing import Union
 
 import torch
 import torch._dynamo
-from accelerated_scan.triton import scan
+try:
+    from accelerated_scan.triton import scan
+except (ImportError, ModuleNotFoundError):
+    pass
 from causal_conv1d import causal_conv1d_fn
 from einops import rearrange
 from torch import nn

@@ -1,4 +1,4 @@
-accelerated-scan
+# accelerated-scan
 boto3
 causal-conv1d==1.2.0.post2
 einops
