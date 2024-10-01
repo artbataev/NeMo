@@ -435,6 +435,8 @@ class AbstractRNNTDecoding(ConfidenceMixin):
 
         # Update the joint fused batch size or disable it entirely if needed.
         self.update_joint_fused_batch_size()
+        from nemo.utils.timers import SimpleTimer
+        self.timer = SimpleTimer()
 
     def rnnt_decoder_predictions_tensor(
         self,
@@ -467,9 +469,11 @@ class AbstractRNNTDecoding(ConfidenceMixin):
         """
         # Compute hypotheses
         with torch.inference_mode():
+            self.timer.start(device=encoder_output.device)
             hypotheses_list = self.decoding(
                 encoder_output=encoder_output, encoded_lengths=encoded_lengths, partial_hypotheses=partial_hypotheses
             )  # type: [List[Hypothesis]]
+            self.timer.stop(device=encoder_output.device)
 
             # extract the hypotheses
             hypotheses_list = hypotheses_list[0]  # type: List[Hypothesis]

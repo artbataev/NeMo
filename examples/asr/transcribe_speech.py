@@ -399,10 +399,15 @@ def main(cfg: TranscriptionConfig) -> Union[TranscriptionConfig, List[Hypothesis
             if hasattr(override_cfg, "prompt"):
                 override_cfg.prompt = parse_multitask_prompt(OmegaConf.to_container(cfg.prompt))
 
-            transcriptions = asr_model.transcribe(
-                audio=filepaths,
-                override_config=override_cfg,
-            )
+            for i in range(3):
+                asr_model.decoding.timer.reset()
+                start_time = time.time()
+                transcriptions = asr_model.transcribe(
+                    audio=filepaths,
+                    override_config=override_cfg,
+                )
+                transcribe_time = time.time() - start_time
+                print(f"Transcribe time: {transcribe_time:.2f}, Decoder time {asr_model.decoding.timer.total_sec():.2f}")
             if cfg.calculate_rtfx:
                 transcribe_time = time.time() - start_time
 
