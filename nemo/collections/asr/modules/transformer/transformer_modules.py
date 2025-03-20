@@ -15,6 +15,7 @@
 # limitations under the License.
 
 import math
+import torch.nn.functional as F
 
 import numpy as np
 import torch
@@ -140,7 +141,7 @@ class MultiHeadAttention(nn.Module):
             whole layer, but before layer normalization
     """
 
-    def __init__(self, hidden_size, num_attention_heads, attn_score_dropout=0.0, attn_layer_dropout=0.0):
+    def __init__(self, hidden_size, num_attention_heads, attn_score_dropout=0.0, attn_layer_dropout=0.0, use_torch_impl: bool | None = True):
         super().__init__()
         if hidden_size % num_attention_heads != 0:
             raise ValueError(
@@ -159,11 +160,15 @@ class MultiHeadAttention(nn.Module):
 
         self.attn_dropout = nn.Dropout(attn_score_dropout)
         self.layer_dropout = nn.Dropout(attn_layer_dropout)
+        # Maybe better: torch.__version__ >= "2.6.0" if use_torch_impl is None else use_torch_impl
+        self._use_torch_impl = True if use_torch_impl is None else use_torch_impl
 
     def transpose_for_scores(self, x):
-        new_x_shape = x.size()[:-1] + (self.num_attention_heads, self.attn_head_size)
-        x = x.view(*new_x_shape)
-        return x.permute(0, 2, 1, 3)
+        # new_x_shape = x.size()[:-1] + (self.num_attention_heads, self.attn_head_size)
+        # x = x.view(*new_x_shape)
+        # return x.permute(0, 2, 1, 3)
+        # [B x L x (Ah x Ad)] -> [B x Ah x L x Ad]
+        return x.unflatten(-1, [self.num_attention_heads, self.attn_head_size]).transpose(1, 2)
 
     def forward(self, queries, keys, values, attention_mask):
 
@@ -178,17 +183,32 @@ class MultiHeadAttention(nn.Module):
         value = self.transpose_for_scores(value)
 
         # for numerical stability we pre-divide query and key by sqrt(sqrt(d))
-        attention_scores = torch.matmul(query, key.transpose(-1, -2))
-        if attention_mask is not None:
-            attention_scores = attention_scores + attention_mask.to(attention_scores.dtype)
-        attention_probs = torch.softmax(attention_scores, dim=-1)
-        attention_probs = self.attn_dropout(attention_probs)
 
-        context = torch.matmul(attention_probs, value)
-        context_hidden_size = context.size()[-1] * self.num_attention_heads
-        context = context.permute(0, 2, 1, 3).contiguous()
-        new_context_shape = context.size()[:-2] + (context_hidden_size,)
-        context = context.view(*new_context_shape)
+        if self._use_torch_impl:
+            context = F.scaled_dot_product_attention(
+                query=query,
+                key=key,
+                value=value,
+                attn_mask=attention_mask.to(query.dtype) if attention_mask is not None else None,
+                dropout_p=self.attn_dropout.p if self.training else 0.0,
+                is_causal=False,
+                scale=1.0,
+                enable_gqa=False)
+        else:
+            attention_scores = torch.matmul(query, key.transpose(-1, -2))
+            if attention_mask is not None:
+                attention_scores = attention_scores + attention_mask.to(attention_scores.dtype)
+            attention_probs = torch.softmax(attention_scores, dim=-1)
+            attention_probs = self.attn_dropout(attention_probs)
+
+            context = torch.matmul(attention_probs, value)
+        # context_hidden_size = context.size()[-1] * self.num_attention_heads
+        # context = context.permute(0, 2, 1, 3).contiguous()
+        # new_context_shape = context.size()[:-2] + (context.size()[-1] * self.num_attention_heads,)
+        # context = context.view(*new_context_shape)
+        # [B x Ah x L x Ad] -> [B x L x (Ah x Ad)]
+        # TODO: do we really need contiguous here?
+        context = context.transpose(1, 2).flatten(2, 3).contiguous()
 
         # output projection
         output_states = self.out_projection(context)

@@ -144,7 +144,8 @@ class GreedySequenceGenerator(ConfidenceMethodMixin):
         """
 
         decoder_hidden_states = self.embedding.forward(decoder_input_ids, start_pos=pos)
-        decoder_input_mask = mask_padded_tokens(decoder_input_ids, self.pad).float()
+        # decoder_input_mask = mask_padded_tokens(decoder_input_ids, self.pad).float()
+        decoder_input_mask = None  # no need to pad tokens - not needed tokens will be discarded later
 
         if encoder_hidden_states is not None:
             decoder_mems_list = self.decoder.forward(
