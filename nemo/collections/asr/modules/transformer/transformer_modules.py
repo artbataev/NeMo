@@ -207,8 +207,7 @@ class MultiHeadAttention(nn.Module):
         # new_context_shape = context.size()[:-2] + (context.size()[-1] * self.num_attention_heads,)
         # context = context.view(*new_context_shape)
         # [B x Ah x L x Ad] -> [B x L x (Ah x Ad)]
-        # TODO: do we really need contiguous here?
-        context = context.transpose(1, 2).flatten(2, 3).contiguous()
+        context = context.transpose(1, 2).flatten(-2)
 
         # output projection
         output_states = self.out_projection(context)
