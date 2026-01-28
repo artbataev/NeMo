@@ -100,9 +100,27 @@ from nemo.utils import logging
 from nemo.utils.timers import SimpleTimer
 
 
+import re
+
+
 def make_divisible_by(num, factor: int) -> int:
     """Make num divisible by factor"""
     return (num // factor) * factor
+
+
+def normalize_text_for_wer(text: str) -> str:
+    """
+    Normalize text for WER calculation.
+    - Convert to lowercase
+    - Keep only a-z, apostrophe, and space
+    - Collapse multiple spaces
+    """
+    text = text.lower()
+    # Keep only lowercase letters, apostrophe, and space
+    text = re.sub(r"[^a-z' ]", " ", text)
+    # Collapse multiple spaces
+    text = re.sub(r" +", " ", text)
+    return text.strip()
 
 
 @dataclass
@@ -161,6 +179,13 @@ class TranscriptionConfig:
     use_cer: bool = False
 
     calculate_rtfx: bool = False
+
+    # TDT duration masking for streaming experiments
+    # Max allowed duration index (0-4 typically). None = no masking (all durations allowed)
+    # 0 = only duration[0], 1 = durations[0,1], etc.
+    tdt_max_duration_index: Optional[int] = None
+    # Normalize hypothesis text (lowercase, keep only a-z, ', space)
+    normalize_hyp_text: bool = False
 
 
 @hydra_runner(config_name="TranscriptionConfig", schema=TranscriptionConfig)
@@ -275,6 +300,14 @@ def main(cfg: TranscriptionConfig) -> TranscriptionConfig:
     asr_model.eval()
 
     decoding_computer: GreedyBatchedLabelLoopingComputerBase = asr_model.decoding.decoding.decoding_computer
+
+    # Apply TDT duration masking if configured
+    if cfg.tdt_max_duration_index is not None:
+        if hasattr(decoding_computer, 'tdt_max_duration_index'):
+            decoding_computer.tdt_max_duration_index = cfg.tdt_max_duration_index
+            logging.info(f"TDT duration masking enabled: max_duration_index={cfg.tdt_max_duration_index}")
+        else:
+            logging.warning("tdt_max_duration_index specified but decoding_computer does not support it")
 
     audio_sample_rate = model_cfg.preprocessor['sample_rate']
 
@@ -447,6 +480,9 @@ def main(cfg: TranscriptionConfig) -> TranscriptionConfig:
     # convert text
     for i, hyp in enumerate(all_hyps):
         hyp.text = asr_model.tokenizer.ids_to_text(hyp.y_sequence.tolist())
+        # Normalize text for WER if configured
+        if cfg.normalize_hyp_text:
+            hyp.text = normalize_text_for_wer(hyp.text)
         if cfg.timestamps:
             hyp = asr_model.decoding.compute_rnnt_timestamps(hyp)
             hyp = process_timestamp_outputs(

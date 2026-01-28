@@ -14,6 +14,7 @@
 
 import json
 import os
+import re
 from dataclasses import dataclass, field, is_dataclass
 from typing import List, Optional, Union
 
@@ -21,6 +22,21 @@ import lightning.pytorch as pl
 import numpy as np
 import torch
 from omegaconf import OmegaConf, open_dict
+
+
+def normalize_text_for_wer(text: str) -> str:
+    """
+    Normalize text for WER calculation.
+    - Convert to lowercase
+    - Keep only a-z, apostrophe, and space
+    - Collapse multiple spaces
+    """
+    text = text.lower()
+    # Keep only lowercase letters, apostrophe, and space
+    text = re.sub(r"[^a-z' ]", " ", text)
+    # Collapse multiple spaces
+    text = re.sub(r" +", " ", text)
+    return text.strip()
 
 from nemo.collections.asr.models import EncDecCTCModel, EncDecHybridRNNTCTCModel, EncDecRNNTModel
 from nemo.collections.asr.models.aed_multitask_models import parse_multitask_prompt
@@ -210,6 +226,12 @@ class TranscriptionConfig:
     warmup_steps: int = 0  # by default - no warmup
     run_steps: int = 1  # by default - single run
 
+    # TDT duration masking for experiments
+    # Max allowed duration index (0-4 typically). None = no masking (all durations allowed)
+    tdt_max_duration_index: Optional[int] = None
+    # Normalize hypothesis text (lowercase, keep only a-z, ', space)
+    normalize_hyp_text: bool = False
+
 
 @hydra_runner(config_name="TranscriptionConfig", schema=TranscriptionConfig)
 def main(cfg: TranscriptionConfig) -> Union[TranscriptionConfig, List[Hypothesis]]:
@@ -358,6 +380,16 @@ def main(cfg: TranscriptionConfig) -> Union[TranscriptionConfig, List[Hypothesis
         else:
             cfg.decoding = cfg.rnnt_decoding
 
+    # Apply TDT duration masking if configured
+    if cfg.tdt_max_duration_index is not None:
+        if hasattr(asr_model, 'decoding') and hasattr(asr_model.decoding, 'decoding'):
+            decoding_computer = getattr(asr_model.decoding.decoding, 'decoding_computer', None)
+            if decoding_computer is not None and hasattr(decoding_computer, 'tdt_max_duration_index'):
+                decoding_computer.tdt_max_duration_index = cfg.tdt_max_duration_index
+                logging.info(f"TDT duration masking enabled: max_duration_index={cfg.tdt_max_duration_index}")
+            else:
+                logging.warning("tdt_max_duration_index specified but decoding_computer does not support it")
+
     filepaths, sorted_manifest_path = prepare_audio_data(cfg)
 
     remove_path_after_done = sorted_manifest_path if sorted_manifest_path is not None else None
@@ -453,6 +485,15 @@ def main(cfg: TranscriptionConfig) -> Union[TranscriptionConfig, List[Hypothesis
         else:
             # extract just best hypothesis
             transcriptions = transcriptions[0]
+
+    # Normalize text if configured
+    if cfg.normalize_hyp_text and transcriptions:
+        logging.info("Normalizing hypothesis text for WER calculation")
+        for i, t in enumerate(transcriptions):
+            if isinstance(t, str):
+                transcriptions[i] = normalize_text_for_wer(t)
+            elif hasattr(t, 'text'):
+                t.text = normalize_text_for_wer(t.text)
 
     if cfg.return_transcriptions:
         return transcriptions

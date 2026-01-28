@@ -209,6 +209,9 @@ class GreedyBatchedTDTLabelLoopingComputer(GreedyBatchedLabelLoopingComputerBase
     state: Optional[LabelLoopingState]
     fusion_models: Optional[List[NGramGPULanguageModel]]
 
+    # Duration masking for streaming experiments (max allowed duration index, None = no masking)
+    tdt_max_duration_index: Optional[int] = None
+
     def __init__(
         self,
         decoder,
@@ -439,7 +442,12 @@ class GreedyBatchedTDTLabelLoopingComputer(GreedyBatchedLabelLoopingComputerBase
                 torch.where(labels == self._blank_index, labels, fusion_labels_max, out=labels)
                 torch.where(labels == self._blank_index, scores, fusion_scores_max, out=scores)
 
-            jump_durations_indices = logits[:, -num_durations:].argmax(dim=-1)
+            # Apply duration masking if configured (for streaming experiments)
+            duration_logits = logits[:, -num_durations:]
+            if self.tdt_max_duration_index is not None and self.tdt_max_duration_index < num_durations - 1:
+                duration_logits = duration_logits.clone()
+                duration_logits[:, self.tdt_max_duration_index + 1 :] = float('-inf')
+            jump_durations_indices = duration_logits.argmax(dim=-1)
             durations = model_durations[jump_durations_indices]
 
             # search for non-blank labels using joint, advancing time indices for blank labels
@@ -496,7 +504,12 @@ class GreedyBatchedTDTLabelLoopingComputer(GreedyBatchedLabelLoopingComputerBase
                 torch.where(advance_mask, more_labels, labels, out=labels)
                 # same as: scores[advance_mask] = more_scores[advance_mask], but non-blocking
                 torch.where(advance_mask, more_scores, scores, out=scores)
-                jump_durations_indices = logits[:, -num_durations:].argmax(dim=-1)
+                # Apply duration masking if configured (for streaming experiments)
+                duration_logits = logits[:, -num_durations:]
+                if self.tdt_max_duration_index is not None and self.tdt_max_duration_index < num_durations - 1:
+                    duration_logits = duration_logits.clone()
+                    duration_logits[:, self.tdt_max_duration_index + 1 :] = float('-inf')
+                jump_durations_indices = duration_logits.argmax(dim=-1)
                 durations = model_durations[jump_durations_indices]
 
                 if use_alignments:

@@ -64,12 +64,28 @@ python speech_to_text_eval.py \
 
 import json
 import os
+import re
 from dataclasses import dataclass, field, is_dataclass
 from typing import Optional
 
 import torch
 import transcribe_speech
 from omegaconf import MISSING, OmegaConf, open_dict
+
+
+def normalize_text_for_wer(text: str) -> str:
+    """
+    Normalize text for WER calculation.
+    - Convert to lowercase
+    - Keep only a-z, apostrophe, and space
+    - Collapse multiple spaces
+    """
+    text = text.lower()
+    # Keep only lowercase letters, apostrophe, and space
+    text = re.sub(r"[^a-z' ]", " ", text)
+    # Collapse multiple spaces
+    text = re.sub(r" +", " ", text)
+    return text.strip()
 
 from nemo.collections.asr.metrics.wer import word_error_rate
 from nemo.collections.asr.parts.utils.transcribe_utils import (
@@ -107,6 +123,12 @@ class EvaluationConfig(transcribe_speech.TranscriptionConfig):
             rm_punctuation=False,
         )
     )
+
+    # TDT duration masking for experiments
+    # Max allowed duration index (0-4 typically). None = no masking (all durations allowed)
+    tdt_max_duration_index: Optional[int] = None
+    # Normalize hypothesis text (lowercase, keep only a-z, ', space)
+    normalize_hyp_text: bool = False
 
 
 @hydra_runner(config_name="EvaluationConfig", schema=EvaluationConfig)
