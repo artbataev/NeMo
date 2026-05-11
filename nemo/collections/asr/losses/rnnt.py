@@ -345,7 +345,7 @@ def resolve_rnnt_loss(loss_name: str, blank_idx: int, loss_kwargs: dict = None) 
 class RNNTLoss(Loss):
     @property
     def input_types(self):
-        """Input types definitions for CTCLoss."""
+        """Input types definitions for RNNTLoss."""
         return {
             "log_probs": NeuralType(('B', 'T', 'T', 'D'), LogprobsType()),
             "targets": NeuralType(('B', 'T'), LabelsType()),
@@ -355,7 +355,7 @@ class RNNTLoss(Loss):
 
     @property
     def output_types(self):
-        """Output types definitions for CTCLoss.
+        """Output types definitions for RNNTLoss.
         loss:
             NeuralType(None)
         """
@@ -474,9 +474,7 @@ class RNNTLoss(Loss):
                 self._fp16_compat_checked = True
 
             # Upcast the activation tensor and compute loss and grads in fp32
-            logits_orig = log_probs
             log_probs = log_probs.float()
-            del logits_orig  # save memory *before* computing the loss
 
         # Ensure that shape mismatch does not occur due to padding
         # Due to padding and subsequent downsampling, it may be possible that
