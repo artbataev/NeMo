@@ -19,7 +19,7 @@ import triton
 import triton.language as tl
 
 
-from nemo.collections.asr.parts.rnnt_triton.utils_triton import log_add_exp, matmul
+from nemo.collections.asr.parts.turbo_transducer.utils_triton import log_add_exp, matmul
 
 
 @triton.jit

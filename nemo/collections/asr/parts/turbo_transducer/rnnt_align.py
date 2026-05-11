@@ -15,7 +15,7 @@
 import torch
 
 from nemo.collections.asr.modules.rnnt_abstract import AbstractRNNTJoint
-from nemo.collections.asr.parts.rnnt_triton.rnnt_logprobs import rnnt_logprobs
+from nemo.collections.asr.parts.turbo_transducer.rnnt_logprobs import rnnt_logprobs
 
 
 def rnnt_best_path_align(

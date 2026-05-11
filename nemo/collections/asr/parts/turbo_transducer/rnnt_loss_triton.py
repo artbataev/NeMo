@@ -17,8 +17,8 @@ import torch
 import triton
 import triton.language as tl
 
-from nemo.collections.asr.parts.rnnt_triton.rnnt_logprobs_triton import rnnt_logprobs_triton
-from nemo.collections.asr.parts.rnnt_triton.utils_triton import log_add_exp
+from nemo.collections.asr.parts.turbo_transducer.rnnt_logprobs_triton import rnnt_logprobs_triton
+from nemo.collections.asr.parts.turbo_transducer.utils_triton import log_add_exp
 
 
 @triton.jit

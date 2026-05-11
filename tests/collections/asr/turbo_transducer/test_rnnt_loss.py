@@ -17,7 +17,7 @@ import pytest
 import torch
 
 from nemo.collections.asr.parts.numba.rnnt_loss.rnnt_numpy import RNNTLoss as RNNTLoss_Numpy
-from nemo.collections.asr.parts.rnnt_triton.rnnt_loss import TritonRnntLoss
+from nemo.collections.asr.parts.turbo_transducer.rnnt_loss import TritonRnntLoss
 from nemo.core.utils.optional_libs import TRITON_AVAILABLE
 
 if not TRITON_AVAILABLE:

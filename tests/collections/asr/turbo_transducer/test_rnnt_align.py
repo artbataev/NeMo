@@ -15,7 +15,7 @@
 import pytest
 import torch
 
-from nemo.collections.asr.parts.rnnt_triton.rnnt_align import align_from_logits, rnnt_best_path_align
+from nemo.collections.asr.parts.turbo_transducer.rnnt_align import align_from_logits, rnnt_best_path_align
 from nemo.core.utils.optional_libs import K2_AVAILABLE
 
 from tests.collections.asr.decoding.utils import avoid_sync_operations

@@ -16,12 +16,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from nemo.collections.asr.parts.rnnt_triton.rnnt_logprobs import get_rnnt_mask, rnnt_logprobs
+from nemo.collections.asr.parts.turbo_transducer.rnnt_logprobs import get_rnnt_mask, rnnt_logprobs
 from nemo.core.utils.optional_libs import K2_AVAILABLE, TRITON_AVAILABLE
 from nemo.utils.enum import PrettyStrEnum
 
 if TRITON_AVAILABLE:
-    from nemo.collections.asr.parts.rnnt_triton.rnnt_consistency_triton import kl_loss_triton
+    from nemo.collections.asr.parts.turbo_transducer.rnnt_consistency_triton import kl_loss_triton
 
 EPS = 1e-5
 

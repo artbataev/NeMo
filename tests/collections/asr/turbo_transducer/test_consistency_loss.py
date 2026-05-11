@@ -15,7 +15,7 @@
 import pytest
 import torch
 
-from nemo.collections.asr.parts.rnnt_triton.rnnt_consistency import (
+from nemo.collections.asr.parts.turbo_transducer.rnnt_consistency import (
     ConsistencyFullRNNTLoss,
     ConsistencyGraphRNNTLoss,
     ConsistencyRNNTLoss,
@@ -572,7 +572,7 @@ class TestKLLossTriton:
     @pytest.mark.parametrize("symmetrical", [True, False])
     @pytest.mark.parametrize("weighted", ["p_non_blank", "p_non_blank_with_grad"])
     def test_kl_loss_triton_weighted_returns_batch_vector(self, symmetrical: bool, weighted: str):
-        from nemo.collections.asr.parts.rnnt_triton.rnnt_consistency_triton import kl_loss_triton
+        from nemo.collections.asr.parts.turbo_transducer.rnnt_consistency_triton import kl_loss_triton
 
         torch.manual_seed(42)
         device = torch.device("cuda")
@@ -606,7 +606,7 @@ class TestKLLossTriton:
         """Compare Triton forward output to PyTorch F.kl_div."""
         import torch.nn.functional as F
 
-        from nemo.collections.asr.parts.rnnt_triton.rnnt_consistency_triton import kl_loss_triton
+        from nemo.collections.asr.parts.turbo_transducer.rnnt_consistency_triton import kl_loss_triton
 
         torch.manual_seed(42)
         device = torch.device("cuda")
@@ -634,7 +634,7 @@ class TestKLLossTriton:
     @requires_cuda
     def test_kl_loss_triton_backward_gradcheck(self):
         """Numerical gradient verification with torch.autograd.gradcheck."""
-        from nemo.collections.asr.parts.rnnt_triton.rnnt_consistency_triton import kl_loss_triton
+        from nemo.collections.asr.parts.turbo_transducer.rnnt_consistency_triton import kl_loss_triton
 
         torch.manual_seed(42)
         device = torch.device("cuda")
@@ -655,7 +655,7 @@ class TestKLLossTriton:
         """Compare Triton backward output to PyTorch reference."""
         import torch.nn.functional as F
 
-        from nemo.collections.asr.parts.rnnt_triton.rnnt_consistency_triton import kl_loss_triton
+        from nemo.collections.asr.parts.turbo_transducer.rnnt_consistency_triton import kl_loss_triton
 
         torch.manual_seed(42)
         device = torch.device("cuda")
@@ -687,7 +687,7 @@ class TestKLLossTriton:
     @requires_cuda
     def test_kl_loss_triton_masked_positions_zero_grad(self):
         """Verify masked positions have zero gradients."""
-        from nemo.collections.asr.parts.rnnt_triton.rnnt_consistency_triton import kl_loss_triton
+        from nemo.collections.asr.parts.turbo_transducer.rnnt_consistency_triton import kl_loss_triton
 
         torch.manual_seed(42)
         device = torch.device("cuda")
@@ -713,7 +713,7 @@ class TestKLLossTriton:
     @requires_cuda
     def test_kl_loss_triton_memory_efficiency(self):
         """Verify peak memory is bounded (should NOT store [B, T, U+1, V] intermediates)."""
-        from nemo.collections.asr.parts.rnnt_triton.rnnt_consistency_triton import kl_loss_triton
+        from nemo.collections.asr.parts.turbo_transducer.rnnt_consistency_triton import kl_loss_triton
 
         torch.manual_seed(42)
         device = torch.device("cuda")
@@ -758,7 +758,7 @@ class TestKLLossTriton:
     @requires_cuda
     def test_kl_loss_triton_no_sync(self):
         """Verify no CUDA synchronization operations during forward/backward."""
-        from nemo.collections.asr.parts.rnnt_triton.rnnt_consistency_triton import kl_loss_triton
+        from nemo.collections.asr.parts.turbo_transducer.rnnt_consistency_triton import kl_loss_triton
         from tests.collections.asr.decoding.utils import avoid_sync_operations
 
         torch.manual_seed(42)
@@ -781,7 +781,7 @@ class TestKLLossTriton:
     @requires_cuda
     def test_kl_loss_triton_identity_zero(self):
         """KL(P||P) = 0."""
-        from nemo.collections.asr.parts.rnnt_triton.rnnt_consistency_triton import kl_loss_triton
+        from nemo.collections.asr.parts.turbo_transducer.rnnt_consistency_triton import kl_loss_triton
 
         torch.manual_seed(42)
         device = torch.device("cuda")
@@ -800,7 +800,7 @@ class TestKLLossTriton:
     @requires_cuda
     def test_kl_loss_triton_non_negativity(self):
         """KL divergence should always be >= 0."""
-        from nemo.collections.asr.parts.rnnt_triton.rnnt_consistency_triton import kl_loss_triton
+        from nemo.collections.asr.parts.turbo_transducer.rnnt_consistency_triton import kl_loss_triton
 
         torch.manual_seed(42)
         device = torch.device("cuda")
@@ -818,7 +818,7 @@ class TestKLLossTriton:
     @requires_cuda
     def test_kl_loss_triton_symmetrical(self):
         """Test symmetric mode: swapping teacher/student gives same loss."""
-        from nemo.collections.asr.parts.rnnt_triton.rnnt_consistency_triton import kl_loss_triton
+        from nemo.collections.asr.parts.turbo_transducer.rnnt_consistency_triton import kl_loss_triton
 
         torch.manual_seed(42)
         device = torch.device("cuda")
@@ -839,7 +839,7 @@ class TestKLLossTriton:
     @requires_cuda
     def test_kl_loss_triton_gradient_flow_to_student(self):
         """Verify gradients flow to student logits but not teacher (teacher detached)."""
-        from nemo.collections.asr.parts.rnnt_triton.rnnt_consistency_triton import kl_loss_triton
+        from nemo.collections.asr.parts.turbo_transducer.rnnt_consistency_triton import kl_loss_triton
 
         torch.manual_seed(42)
         device = torch.device("cuda")
@@ -865,7 +865,7 @@ class TestKLLossTriton:
     @pytest.mark.parametrize("V", [4095, 4096])
     def test_kl_loss_triton_large_vocab(self, V):
         """Test with large vocabulary size (power-of-2 and non-power-of-2)."""
-        from nemo.collections.asr.parts.rnnt_triton.rnnt_consistency_triton import kl_loss_triton
+        from nemo.collections.asr.parts.turbo_transducer.rnnt_consistency_triton import kl_loss_triton
 
         torch.manual_seed(42)
         device = torch.device("cuda")
@@ -888,7 +888,7 @@ class TestKLLossTriton:
         """Test forward correctness with non-power-of-2 vocab size."""
         import torch.nn.functional as F
 
-        from nemo.collections.asr.parts.rnnt_triton.rnnt_consistency_triton import kl_loss_triton
+        from nemo.collections.asr.parts.turbo_transducer.rnnt_consistency_triton import kl_loss_triton
 
         torch.manual_seed(42)
         device = torch.device("cuda")
@@ -918,7 +918,7 @@ class TestKLLossTriton:
         """Test backward correctness with non-power-of-2 vocab size."""
         import torch.nn.functional as F
 
-        from nemo.collections.asr.parts.rnnt_triton.rnnt_consistency_triton import kl_loss_triton
+        from nemo.collections.asr.parts.turbo_transducer.rnnt_consistency_triton import kl_loss_triton
 
         torch.manual_seed(42)
         device = torch.device("cuda")
@@ -960,7 +960,7 @@ class TestFusedSymmetricKLDivTriton:
     @requires_cuda
     def test_fused_symmetric_forward_matches_two_kernel(self):
         """Verify fused symmetric kernel matches the two-kernel approach."""
-        from nemo.collections.asr.parts.rnnt_triton.rnnt_consistency_triton import FusedKLDivTriton
+        from nemo.collections.asr.parts.turbo_transducer.rnnt_consistency_triton import FusedKLDivTriton
 
         torch.manual_seed(42)
         device = torch.device("cuda")
@@ -988,7 +988,7 @@ class TestFusedSymmetricKLDivTriton:
         """Verify fused symmetric kernel matches PyTorch reference."""
         import torch.nn.functional as F
 
-        from nemo.collections.asr.parts.rnnt_triton.rnnt_consistency_triton import kl_loss_triton
+        from nemo.collections.asr.parts.turbo_transducer.rnnt_consistency_triton import kl_loss_triton
 
         torch.manual_seed(42)
         device = torch.device("cuda")
@@ -1019,7 +1019,7 @@ class TestFusedSymmetricKLDivTriton:
     @requires_cuda
     def test_fused_symmetric_backward_matches_two_kernel(self):
         """Verify fused symmetric backward matches the original two-kernel approach."""
-        from nemo.collections.asr.parts.rnnt_triton.rnnt_consistency_triton import FusedKLDivTriton
+        from nemo.collections.asr.parts.turbo_transducer.rnnt_consistency_triton import FusedKLDivTriton
 
         torch.manual_seed(42)
         device = torch.device("cuda")
@@ -1059,7 +1059,7 @@ class TestFusedSymmetricKLDivTriton:
         """Compare fused symmetric backward to PyTorch reference."""
         import torch.nn.functional as F
 
-        from nemo.collections.asr.parts.rnnt_triton.rnnt_consistency_triton import kl_loss_triton
+        from nemo.collections.asr.parts.turbo_transducer.rnnt_consistency_triton import kl_loss_triton
 
         torch.manual_seed(42)
         device = torch.device("cuda")
@@ -1104,7 +1104,7 @@ class TestFusedSymmetricKLDivTriton:
     @requires_cuda
     def test_fused_symmetric_both_receive_gradients(self):
         """Verify both teacher and student receive gradients in symmetric mode."""
-        from nemo.collections.asr.parts.rnnt_triton.rnnt_consistency_triton import kl_loss_triton
+        from nemo.collections.asr.parts.turbo_transducer.rnnt_consistency_triton import kl_loss_triton
 
         torch.manual_seed(42)
         device = torch.device("cuda")
@@ -1127,7 +1127,7 @@ class TestFusedSymmetricKLDivTriton:
     @requires_cuda
     def test_fused_symmetric_gradients_are_negatives(self):
         """Verify teacher and student gradients are negatives of each other."""
-        from nemo.collections.asr.parts.rnnt_triton.rnnt_consistency_triton import kl_loss_triton
+        from nemo.collections.asr.parts.turbo_transducer.rnnt_consistency_triton import kl_loss_triton
 
         torch.manual_seed(42)
         device = torch.device("cuda")
@@ -1149,7 +1149,7 @@ class TestFusedSymmetricKLDivTriton:
     @requires_cuda
     def test_fused_symmetric_masked_positions_zero_grad(self):
         """Verify masked positions have zero gradients for both tensors."""
-        from nemo.collections.asr.parts.rnnt_triton.rnnt_consistency_triton import kl_loss_triton
+        from nemo.collections.asr.parts.turbo_transducer.rnnt_consistency_triton import kl_loss_triton
 
         torch.manual_seed(42)
         device = torch.device("cuda")
@@ -1177,7 +1177,7 @@ class TestFusedSymmetricKLDivTriton:
     @requires_cuda
     def test_fused_symmetric_identity_zero(self):
         """Symmetric KL(P||P) = 0."""
-        from nemo.collections.asr.parts.rnnt_triton.rnnt_consistency_triton import kl_loss_triton
+        from nemo.collections.asr.parts.turbo_transducer.rnnt_consistency_triton import kl_loss_triton
 
         torch.manual_seed(42)
         device = torch.device("cuda")
@@ -1196,7 +1196,7 @@ class TestFusedSymmetricKLDivTriton:
     @requires_cuda
     def test_fused_symmetric_non_negativity(self):
         """Symmetric KL divergence should always be >= 0."""
-        from nemo.collections.asr.parts.rnnt_triton.rnnt_consistency_triton import kl_loss_triton
+        from nemo.collections.asr.parts.turbo_transducer.rnnt_consistency_triton import kl_loss_triton
 
         torch.manual_seed(42)
         device = torch.device("cuda")
@@ -1215,7 +1215,7 @@ class TestFusedSymmetricKLDivTriton:
     @pytest.mark.parametrize("V", [4095, 4096])
     def test_fused_symmetric_large_vocab(self, V):
         """Test fused symmetric kernel with large vocabulary size (power-of-2 and non-power-of-2)."""
-        from nemo.collections.asr.parts.rnnt_triton.rnnt_consistency_triton import kl_loss_triton
+        from nemo.collections.asr.parts.turbo_transducer.rnnt_consistency_triton import kl_loss_triton
 
         torch.manual_seed(42)
         device = torch.device("cuda")
@@ -1240,7 +1240,7 @@ class TestFusedSymmetricKLDivTriton:
         """Test fused symmetric forward+backward with non-power-of-2 vocab size."""
         import torch.nn.functional as F
 
-        from nemo.collections.asr.parts.rnnt_triton.rnnt_consistency_triton import kl_loss_triton
+        from nemo.collections.asr.parts.turbo_transducer.rnnt_consistency_triton import kl_loss_triton
 
         torch.manual_seed(42)
         device = torch.device("cuda")
@@ -1278,7 +1278,7 @@ class TestFusedSymmetricKLDivTriton:
     @requires_cuda
     def test_fused_symmetric_no_sync(self):
         """Verify no CUDA synchronization operations during fused symmetric forward/backward."""
-        from nemo.collections.asr.parts.rnnt_triton.rnnt_consistency_triton import kl_loss_triton
+        from nemo.collections.asr.parts.turbo_transducer.rnnt_consistency_triton import kl_loss_triton
         from tests.collections.asr.decoding.utils import avoid_sync_operations
 
         torch.manual_seed(42)

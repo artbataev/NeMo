@@ -27,7 +27,7 @@ from dataclasses import dataclass
 
 import torch
 
-from nemo.collections.asr.parts.rnnt_triton.rnnt_consistency import ConsistencyFullRNNTLoss
+from nemo.collections.asr.parts.turbo_transducer.rnnt_consistency import ConsistencyFullRNNTLoss
 
 
 @dataclass

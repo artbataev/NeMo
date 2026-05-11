@@ -16,12 +16,12 @@ import pytest
 import torch
 import torch.nn.functional as F
 
-from nemo.collections.asr.parts.rnnt_triton.rnnt_logprobs import rnnt_logprobs_torch
+from nemo.collections.asr.parts.turbo_transducer.rnnt_logprobs import rnnt_logprobs_torch
 from nemo.core.utils.optional_libs import TRITON_AVAILABLE
 from tests.collections.asr.decoding.utils import avoid_sync_operations
 
 if TRITON_AVAILABLE:
-    from nemo.collections.asr.parts.rnnt_triton.rnnt_joint_vocab_logprobs_triton import (
+    from nemo.collections.asr.parts.turbo_transducer.rnnt_joint_vocab_logprobs_triton import (
         rnnt_joint_vocab_logprobs_triton,
     )
 

@@ -19,7 +19,7 @@ from nemo.core.utils.optional_libs import TRITON_AVAILABLE, triton_required
 from nemo.utils import logging
 
 if TRITON_AVAILABLE:
-    from nemo.collections.asr.parts.rnnt_triton.rnnt_loss_triton import rnnt_loss_triton
+    from nemo.collections.asr.parts.turbo_transducer.rnnt_loss_triton import rnnt_loss_triton
 
 
 class TritonRnntLoss(nn.Module):

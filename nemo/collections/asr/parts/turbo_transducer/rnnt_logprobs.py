@@ -20,7 +20,7 @@ from nemo.utils import logging
 from nemo.utils.nemo_logging import LogMode
 
 if TRITON_AVAILABLE:
-    from nemo.collections.asr.parts.rnnt_triton.rnnt_logprobs_triton import rnnt_logprobs_triton
+    from nemo.collections.asr.parts.turbo_transducer.rnnt_logprobs_triton import rnnt_logprobs_triton
 
 def get_rnnt_mask(
         batch_size: int,

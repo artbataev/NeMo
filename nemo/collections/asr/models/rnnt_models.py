@@ -38,7 +38,7 @@ from nemo.collections.asr.parts.mixins import (
     TranscriptionReturnType,
 )
 from nemo.collections.asr.parts.preprocessing.segment import ChannelSelectorType
-from nemo.collections.asr.parts.rnnt_triton.rnnt_consistency import (
+from nemo.collections.asr.parts.turbo_transducer.rnnt_consistency import (
     ConsistencyFullRNNTLoss,
     ConsistencyGraphRNNTLoss,
     ConsistencyRNNTLoss,

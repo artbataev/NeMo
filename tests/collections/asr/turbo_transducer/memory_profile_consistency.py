@@ -27,7 +27,7 @@ This helps understand:
 
 import torch
 
-from nemo.collections.asr.parts.rnnt_triton.rnnt_consistency_triton import FusedKLDivTriton
+from nemo.collections.asr.parts.turbo_transducer.rnnt_consistency_triton import FusedKLDivTriton
 
 
 def profile_memory(symmetric: bool, dtype: torch.dtype = torch.float32):
