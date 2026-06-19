@@ -159,10 +159,7 @@ class TranscriptionConfig:
     decoding: RNNTDecodingConfig = field(default_factory=RNNTDecodingConfig)
     # Per-utterance biasing with biasing config in the manifest
     use_per_stream_biasing: bool = False
-    # Override boosting_model_alpha from manifest; if None, use per-sample value from manifest
-    boosting_model_alpha: Optional[float] = None
-    # Override depth_scaling from manifest; if None, use per-sample value from manifest
-    boosting_depth_scaling: Optional[float] = None
+    per_stream_biasing_defaults: BiasingRequestItemConfig = field(default_factory=BiasingRequestItemConfig)
     # simulated decoding (False by default) for faster experiments
     # + experiments with different decoding algorithms not yet implemented in streaming
     # encoder is evaluated on chunks, output is concatenated and decoded at one step
@@ -366,21 +363,17 @@ def main(cfg: TranscriptionConfig) -> TranscriptionConfig:
 
     biasing_requests: list[BiasingRequestItemConfig | None] | None
     if use_per_stream_biasing:
-        biasing_requests = []
-        for record in records:
-            if "biasing_request" in record:
-                request = BiasingRequestItemConfig(
-                    **OmegaConf.to_container(
-                        OmegaConf.merge(OmegaConf.structured(BiasingRequestItemConfig), record["biasing_request"])
-                    )
+        default_biasing_request_cfg = OmegaConf.structured(cfg.per_stream_biasing_defaults)
+        biasing_requests = [
+            (
+                BiasingRequestItemConfig(
+                    **OmegaConf.to_container(OmegaConf.merge(default_biasing_request_cfg, record["biasing_request"]))
                 )
-                if cfg.boosting_model_alpha is not None:
-                    request.boosting_model_alpha = cfg.boosting_model_alpha
-                if cfg.boosting_depth_scaling is not None:
-                    request.boosting_model_cfg.depth_scaling = cfg.boosting_depth_scaling
-                biasing_requests.append(request)
-            else:
-                biasing_requests.append(None)
+                if "biasing_request" in record
+                else None
+            )
+            for record in records
+        ]
     else:
         biasing_requests = None
 
