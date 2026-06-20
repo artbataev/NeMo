@@ -124,7 +124,9 @@ class EvalContextBiasingConfig:
     spelling_separator: str = "_"  # separator between word and its spellings in context biasing file
     # Per-stream context biasing: each sample has its own keyword list from the manifest
     use_per_stream_context: bool = False
-    context_field: str = "biasing_request.boosting_model_cfg.key_phrases_list"  # manifest field with per-sample phrases
+    context_field: str = (
+        "biasing_request.boosting_model_cfg.key_phrases_list"  # manifest field with per-sample phrases
+    )
     beam_threshold: list[float] = field(default_factory=lambda: [5.0])  # beam pruning threshold for ctc-ws decoding
     context_score: list[float] = field(default_factory=lambda: [3.0])  # per token weight for context biasing words
     ctc_ali_token_weight: list[float] = field(
@@ -255,9 +257,7 @@ def decoding_step(
                     'wer': f"{wer_dist/len(target_split_w):.4f}",
                 }
                 if per_sample_phrases:
-                    item['context_words'] = ",".join(
-                        p.split("_")[0] for p in per_sample_phrases[batch_idx]
-                    )
+                    item['context_words'] = ",".join(p.split("_")[0] for p in per_sample_phrases[batch_idx])
                 print(json.dumps(item), file=out_manifest)
         out_manifest.close()
 
@@ -382,9 +382,7 @@ def main(cfg: EvalContextBiasingConfig):
         if not isinstance(ctc_model, (EncDecCTCModelBPE, EncDecHybridRNNTCTCModel)):
             raise ValueError("CTC model (ctc_nemo_model_file) must be EncDecCTCModelBPE or EncDecHybridRNNTCTCModel")
         if not isinstance(asr_model, (EncDecRNNTBPEModel, EncDecHybridRNNTCTCModel)):
-            raise ValueError(
-                "When using separate CTC model, the main model (nemo_model_file) must be an RNNT model"
-            )
+            raise ValueError("When using separate CTC model, the main model (nemo_model_file) must be an RNNT model")
     else:
         if not isinstance(asr_model, (EncDecCTCModelBPE, EncDecHybridRNNTCTCModel)):
             raise ValueError("ASR model must be CTC BPE or Hybrid Transducer-CTC")
