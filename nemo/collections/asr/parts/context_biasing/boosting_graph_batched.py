@@ -84,6 +84,8 @@ class BoostingTreeModelConfig:
         5  # The number of alternative transcriptions to generate for each context-biasing phrase
     )
     bpe_alpha: float = 0.3  # The alpha parameter for BPE dropout
+    # var_bpe_scoring_temp: 10.0 is default conservative for case_insensitive/var_bpe modes to prevent FA;
+    # values 0.1 ... 1.0 can work better with small biasing lists with beam search
     var_bpe_scoring_temp: float = 10.0
 
     @staticmethod
@@ -233,7 +235,7 @@ class BoostingTreeStorage:
                 next_state = self.num_states
                 self.num_states += 1
                 self._state_mapping[tbranch.next_node.id] = next_state
-            # token_score = tbranch.next_node.token_score
+            # token_score: difference of potentials of nodes
             token_score = tbranch.next_node.node_score - tbranch.start_node.node_score
             if self.uniform_weights and tbranch.next_node.is_end:
                 token_score += tbranch.next_node.node_score
@@ -660,9 +662,6 @@ class GPUBoostingTreeModel(NGramGPULanguageModel):
                 phrases=phrases,
                 uniform_weights=cfg.uniform_weights,
             )
-
-        # graph_name = "no_var"
-        # context_graph.draw(title=f"graph_{graph_name}", symbol_table=tokenizer.vocab, filename=f"/Users/vbataev/code/nemo/.sandbox/graph_{graph_name}.pdf")
 
         # 4. build GPU boosting tree model from python context graph
         boosting_tree_model = GPUBoostingTreeModel.from_context_graph(
